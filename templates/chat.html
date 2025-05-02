@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
+</head>
+<body>
+    <div class="container">
+        <h1>Chat with AI Assistant</h1>
+
+        <div class="chat-container">
+            <!-- Displaying the chat responses -->
+            <div class="chat-box">
+                {% if answer %}
+                    <div class="answer-box">
+                        <pre>{{ answer }}</pre>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Form Section -->
+            <form method="POST" enctype="multipart/form-data" class="chat-form">
+                {{ form.hidden_tag() }}
+                <div class="form-section">
+                    <div class="resume-upload">
+                        {{ form.resume.label }}<br>
+                        {{ form.resume() }}
+                    </div>
+                    <div>
+                        {{ form.job_description.label }}<br>
+                        {{ form.job_description(size=50) }}
+                    </div>
+                    <div>
+                        {{ form.question.label }}<br>
+                        {{ form.question(size=50) }}
+                    </div>
+                    <button type="submit">Ask Question</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Extracted Info -->
+        {% if extracted_info %}
+        <div class="extracted-info">
+            <h4>Extracted Information</h4>
+            <pre>{{ extracted_info }}</pre>
+        </div>
+        {% endif %}
+
+    </div>
+
+    <footer>
+        <p>Siddhi &copy; 2025</p>
+    </footer>
+</body>
+</html>
+
