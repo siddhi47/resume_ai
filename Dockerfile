@@ -1,5 +1,5 @@
 # Use a Python base image
-FROM python:3.9-slim
+FROM python:3.12-slim
 
 # Set environment variables to prevent Python from writing pyc files to disc
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -17,20 +17,19 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements.txt file and install dependencies
-COPY requirements.txt /app/
 
+COPY . /app/
 RUN pip install .
 
 # Copy the entire project to the container
-COPY . /app/
 
 # Expose the Flask port (5000 by default)
-EXPOSE 5000
+EXPOSE 5050
 
 # Set the environment variable for Flask
 ENV FLASK_APP=app.py
 ENV FLASK_RUN_HOST=0.0.0.0
 
 # Start the Flask app
-CMD ["flask", "run", "--host=0.0.0.0"]
 
+CMD ["gunicorn","-b", "0.0.0.0:5050" , "app:app"]

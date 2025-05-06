@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: flask-app
+  template:
+    metadata:
+      labels:
+        app: flask-app
+    spec:
+      containers:
+        - name: flask-app
+          image: siddhi47/resume_bot_flask
+          ports:
+            - containerPort: 5050  # Flask app runs on port 5050
+          env:
+            - name: FLASK_APP
+              value: "app.py"
+            - name: FLASK_ENV
+              value: "production"
+          volumeMounts:
+            - name: app-volume
+              mountPath: /app
+      
+        # NGINX sidecar container
+        - name: nginx
+          image: nginx:latest
+          ports:
+            - containerPort: 80  # Expose NGINX on port 80
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d  # Mount the NGINX config
+
+      volumes:
+        - name: app-volume
+          hostPath:
+            path: /host  # replace with your local code path (optional in prod)
+            type: Directory
+        
+        # NGINX ConfigMap volume
+        - name: nginx-conf
+          configMap:
+            name: nginx-config  # ConfigMap with NGINX config
+
+

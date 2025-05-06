@@ -10,8 +10,8 @@ from flask_login import (
 )
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
-from auth import users, User
-from forms import LoginForm, ResumeChatForm
+from src.resume_bot.auth import users, User
+from src.resume_bot.forms import LoginForm, ResumeChatForm
 
 # LangChain & OpenAI
 from langchain.chat_models import ChatOpenAI
