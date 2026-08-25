@@ -1,5 +1,9 @@
+import re
+
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
+
+URL_PATTERN = re.compile(r"https?://\S+")
 
 REJECTION_MESSAGE = (
     "I can only help with job applications — resumes, cover letters, job postings, and related "
@@ -42,6 +46,13 @@ def _get_router_llm():
 
 
 async def is_in_scope(message: str) -> bool:
+    # A pasted URL is the core UX for the job-posting-fetch feature, and the LLM classifier
+    # proved unreliable on bare/lightly-labeled links (rejected even "This is a job posting
+    # URL: <link>"). Treat any URL as in-scope deterministically rather than relying on the
+    # classifier for this case — cheaper too, since it skips the LLM call entirely.
+    if URL_PATTERN.search(message):
+        return True
+
     chain = _ROUTER_PROMPT | _get_router_llm()
     result = await chain.ainvoke({"message": message})
     return result.content.strip().upper().startswith("IN_SCOPE")
