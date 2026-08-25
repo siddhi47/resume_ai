@@ -49,8 +49,11 @@ Guidelines:
   template file directly. If get_resume_context says no resume is on file, that only affects cover letters/Q&A; still
   attempt generate_tailored_resume when asked to tailor a resume, and only report it as unavailable if that specific
   tool call itself says the template file is missing.
-- If the job description emphasizes specific technologies or project types, consider looking up the user's GitHub
-  repositories to ground your answer in real projects — but don't do this for casual conversation or simple questions.
+- Before calling generate_tailored_resume, look up the user's GitHub repositories first (if GitHub access is
+  configured) unless you already did so earlier in this conversation — even when the job title alone seems to imply
+  a technology area (e.g. "Machine Learning Engineer"), a real search result is what lets generate_tailored_resume
+  add a genuine new project; without one, it can only reorder existing content. Skip this only for casual
+  conversation or simple questions unrelated to tailoring a resume.
 - If you looked up GitHub repositories earlier in the conversation and found ones relevant to the job at hand, pass
   them as the relevant_projects argument when calling generate_cover_letter OR generate_tailored_resume, so the
   output reflects real work instead of generic claims. ALWAYS include the repo's actual URL for each project you

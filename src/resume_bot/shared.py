@@ -196,7 +196,7 @@ Rules:
 Relevant GitHub Projects:
 - {relevant_projects}
 - If this lists specific real GitHub projects (with a name, description, and URL) that are NOT already in the Original Resume's Projects section, you may add ONE new entry per such project to the Projects section, copying the exact same LaTeX pattern already used there (a \\begin{{twocolentry}}...\\textbf{{Project Name}}\\end{{twocolentry}} followed by \\begin{{onecolentry}}\\begin{{highlights}}\\item description with a \\href{{URL}}{{link text}}\\end{{highlights}}\\end{{onecolentry}}). Use the exact name/description/URL given — never invent details about a project beyond what's given here.
-- If nothing here is new (already in the resume, or this says "None found."), do not add anything — just use it as a signal for which EXISTING bullets/skills to prioritize when reordering.
+- If nothing here is new (already in the resume, or this says "None found."), you must NOT add any new Projects-section entry, even if the job description would make one look like a good fit — a project without a real URL given here has no verified source, full stop. In that case only reorder/reword EXISTING content.
 
 Revision feedback:
 - {revision_feedback}
