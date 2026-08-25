@@ -39,9 +39,10 @@ COVER_LETTER_JUDGE_RULES = f"""
 
 RESUME_JUDGE_RULES = """
 - Does not invent or fabricate any experience, employer, title, date, skill, or metric that isn't
-  already present in the original resume.
-- Only rewords existing bullet points/summary/skills to match the job — never adds new claims.
+  already present in the original resume or in the verified GitHub projects it was given.
 - Every original bullet point and skill still appears somewhere (reordering is fine, dropping is not).
+- Any new Projects-section entry is only acceptable if it corresponds to one of the specific,
+  verified GitHub repositories it was given (real name/description/URL) — never a project it made up.
 """
 
 
@@ -66,8 +67,13 @@ def validate_cover_letter_text(text):
     return issues
 
 
-def validate_tailored_resume_structure(original_tex, tailored_tex):
+def validate_tailored_resume_structure(original_tex, tailored_tex, allowed_extra_hrefs=None):
+    """Checks structural preservation. allowed_extra_hrefs (a set of URLs) lets new links through
+    when they correspond to real, verified GitHub projects the caller explicitly vouched for
+    (e.g. extracted from the relevant_projects text) — anything else new is flagged as a likely
+    fabrication, since the tailoring prompt is only supposed to reword/reorder existing content."""
     issues = []
+    allowed_extra_hrefs = allowed_extra_hrefs or set()
 
     orig_sections = SECTION_PATTERN.findall(original_tex)
     new_sections = SECTION_PATTERN.findall(tailored_tex)
@@ -85,9 +91,12 @@ def validate_tailored_resume_structure(original_tex, tailored_tex):
 
     orig_hrefs = set(HREF_PATTERN.findall(original_tex))
     new_hrefs = set(HREF_PATTERN.findall(tailored_tex))
-    extra_hrefs = new_hrefs - orig_hrefs
-    if extra_hrefs:
-        issues.append(f"contains links not present in the original resume: {extra_hrefs}")
+    unexplained_hrefs = new_hrefs - orig_hrefs - allowed_extra_hrefs
+    if unexplained_hrefs:
+        issues.append(
+            f"contains links not present in the original resume and not in the vouched-for "
+            f"GitHub projects: {unexplained_hrefs}"
+        )
 
     return issues
 

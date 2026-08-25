@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 from typing import Annotated
 
@@ -168,10 +169,11 @@ def generate_tailored_resume(
     """Tailor the user's LaTeX resume template to the given job description and compile it to a downloadable PDF.
 
     If you already looked up the candidate's real GitHub repositories earlier in this conversation
-    and found ones especially relevant to this job, pass a short summary of them (name + why
-    relevant) as relevant_projects. This only affects which EXISTING resume bullets/skills get
-    emphasized or reordered — the resume can't add new bullets, projects, or links, so don't expect
-    GitHub findings to appear as new content, only as a signal for what to prioritize.
+    and found ones especially relevant to this job, pass them as relevant_projects — include each
+    project's real URL. A project with a URL included may be added as a new Projects-section entry
+    if it isn't already in the resume; without a URL it can only inform reordering of existing
+    content. The tool's own response tells you exactly what happened — rely on that, not on what
+    you expect, when describing the result to the user.
     """
     user_id = config["configurable"]["user_id"]
     job_summary, company = get_job_context(job_description)
@@ -214,6 +216,10 @@ def generate_tailored_resume(
         if os.path.exists(stale_path):
             os.remove(stale_path)
 
+    # URLs the caller explicitly vouched for (from relevant_projects) are allowed to appear as
+    # new links in the tailored resume — anything else new is treated as a likely fabrication.
+    allowed_extra_hrefs = set(re.findall(r"https?://\S+", relevant_projects or ""))
+
     def attempt(feedback):
         raw = resume_chain.run(
             tex_source=tex_source,
@@ -224,7 +230,9 @@ def generate_tailored_resume(
         return strip_code_fence(raw)
 
     def check(candidate_tex):
-        issues = validate_tailored_resume_structure(tex_source, candidate_tex)
+        issues = validate_tailored_resume_structure(
+            tex_source, candidate_tex, allowed_extra_hrefs=allowed_extra_hrefs
+        )
         if issues:
             return issues
 
@@ -245,10 +253,17 @@ def generate_tailored_resume(
     def fix(text, issues):
         return strip_code_fence(surgical_fix("tailored LaTeX resume", text, issues))
 
+    judge_rules = RESUME_JUDGE_RULES
+    if relevant_projects:
+        judge_rules += (
+            f"\n\nThe following GitHub projects were verified as real and may legitimately appear "
+            f"as new Projects-section entries — do not flag these as fabricated:\n{relevant_projects}"
+        )
+
     tailored_tex, remaining_issues = generate_with_validation(
         attempt_fn=attempt,
         deterministic_check_fn=check,
-        judge_rules=RESUME_JUDGE_RULES,
+        judge_rules=judge_rules,
         document_type="tailored LaTeX resume",
         fix_fn=fix,
     )
@@ -259,7 +274,18 @@ def generate_tailored_resume(
     if not remaining_issues and os.path.exists(tailored_pdf_path):
         final_name = f"{base_filename}.pdf"
         os.replace(tailored_pdf_path, os.path.join(out_dir, final_name))
-        message = "Tailored resume validated and compiled to PDF, ready for download."
+        orig_hrefs = set(re.findall(r"\\href\{([^}]*)\}", tex_source))
+        added_hrefs = set(re.findall(r"\\href\{([^}]*)\}", tailored_tex)) - orig_hrefs
+        if added_hrefs:
+            message = (
+                "Tailored resume validated and compiled to PDF, ready for download. Added new "
+                f"Projects-section entries for: {', '.join(sorted(added_hrefs))}."
+            )
+        else:
+            message = (
+                "Tailored resume validated and compiled to PDF, ready for download. No new "
+                "projects were added — existing content was reworded/reordered only."
+            )
     else:
         with open(tailored_tex_path, "w", encoding="utf-8") as f:
             f.write(tailored_tex)

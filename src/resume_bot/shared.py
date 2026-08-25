@@ -175,17 +175,16 @@ RESUME_TAILORING_PROMPT_TEMPLATE = """
 You are tailoring a candidate's LaTeX resume for a specific job.
 
 Rules:
-- Preserve the LaTeX document structure, commands, environments, and packages exactly. Do not remove, add, or reorder any \\section, \\begin/\\end, or preamble commands.
+- Preserve the LaTeX document structure, commands, environments, packages, and section list exactly. Do not remove, add, or reorder any \\section or preamble commands, and do not touch any section other than Projects (see below for the one exception there).
 - Only rewrite the wording of existing bullet points, summary text, and skill list ordering to better match the job description.
-- Do not invent or fabricate any experience, employer, title, date, skill, or metric that is not already present in the original resume.
+- Do not invent or fabricate any experience, employer, title, date, skill, or metric that is not already present in the original resume or explicitly given to you as a verified GitHub project below.
 - You may reorder bullet points within a section, and reorder items within a skills list, by relevance to the job, but every original bullet/skill must still appear somewhere.
 - Return the complete, compilable .tex file and nothing else: no explanation, no markdown code fences, no commentary before or after.
 
 Relevant GitHub Projects:
 - {relevant_projects}
-- Use this only as a signal for which EXISTING bullets/skills to prioritize when reordering. Do
-  not add a new bullet, project entry, or link for anything listed here that isn't already in the
-  Original Resume below — that would violate the "no new content" rule above.
+- If this lists specific real GitHub projects (with a name, description, and URL) that are NOT already in the Original Resume's Projects section, you may add ONE new entry per such project to the Projects section, copying the exact same LaTeX pattern already used there (a \\begin{{twocolentry}}...\\textbf{{Project Name}}\\end{{twocolentry}} followed by \\begin{{onecolentry}}\\begin{{highlights}}\\item description with a \\href{{URL}}{{link text}}\\end{{highlights}}\\end{{onecolentry}}). Use the exact name/description/URL given — never invent details about a project beyond what's given here.
+- If nothing here is new (already in the resume, or this says "None found."), do not add anything — just use it as a signal for which EXISTING bullets/skills to prioritize when reordering.
 
 Revision feedback:
 - {revision_feedback}
