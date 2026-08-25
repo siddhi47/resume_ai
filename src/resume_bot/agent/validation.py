@@ -7,7 +7,10 @@ from langchain.prompts import PromptTemplate
 from src.resume_bot.shared import BANNED_PHRASES
 
 PLACEHOLDER_PATTERN = re.compile(r"\[[A-Za-z][A-Za-z '.,]{2,40}\]")
-BANNED_OPENER_PATTERN = re.compile(r"\b(writing|excited|eager|pleased|thrilled)\s+to\s+express\s+my\s+interest\b")
+BANNED_OPENER_PATTERN = re.compile(
+    r"\b(writing|excited|eager|pleased|thrilled|delighted)\s+to\s+"
+    r"(express my interest|apply for|join|be considered for|submit my application)\b"
+)
 
 SECTION_PATTERN = re.compile(r"\\section\{([^}]*)\}")
 ITEM_PATTERN = re.compile(r"\\item\b")
@@ -181,7 +184,9 @@ def generate_with_validation(
         if not passed:
             fixed_issues = [judge_feedback]
 
-    if not fixed_issues or len(fixed_issues) < len(last_issues):
+    # Prefer the fixed draft unless it's strictly worse — a fix that doesn't fully satisfy the
+    # judge is still closer to correct than reverting to the pre-fix draft.
+    if len(fixed_issues) <= len(last_issues):
         return fixed_text, fixed_issues
 
     return last_text, last_issues

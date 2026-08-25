@@ -123,7 +123,7 @@ Writing style:
 - Vary sentence length. Do not write every sentence in the same "subject-verb-adjective-noun" shape.
 - Do not use these words/phrases or close variants of them: {banned_phrases}.
 - Do not use em dashes.
-- Do not open with "I am writing to express my interest" or any close variant.
+- Do not open the letter with any variant of the pattern "I am [writing/excited/eager/pleased/thrilled] to [express my interest in/apply for/join] the [role] position" — this entire sentence shape is a cliché, not just the exact words "writing to express my interest". Instead, open with a specific fact from the resume that connects directly to the role (e.g. naming a relevant project, tool, or result in the first sentence).
 - Keep it to 3-4 short paragraphs. No filler sentences that restate the job posting back at the reader.
 
 Relevant GitHub Projects:
