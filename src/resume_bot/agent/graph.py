@@ -16,7 +16,7 @@ if not hasattr(aiosqlite.Connection, "is_alive"):
 
 from src.resume_bot.agent.gatekeeper import REJECTION_MESSAGE, is_in_scope
 from src.resume_bot.agent.mcp import load_github_tools
-from src.resume_bot.agent.prompts import SYSTEM_PROMPT
+from src.resume_bot.agent.prompts import get_system_prompt
 from src.resume_bot.agent.state import AgentState
 from src.resume_bot.agent.tools import LOCAL_TOOLS
 
@@ -42,7 +42,7 @@ def _build_agent(tools, checkpointer):
     return create_react_agent(
         model=_get_llm(),
         tools=tools,
-        prompt=SYSTEM_PROMPT,
+        prompt=get_system_prompt(),
         state_schema=AgentState,
         checkpointer=checkpointer,
     )
