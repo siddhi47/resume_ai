@@ -1,3 +1,4 @@
+import difflib
 import re
 
 from langchain.chains import LLMChain
@@ -15,6 +16,36 @@ BANNED_OPENER_PATTERN = re.compile(
 SECTION_PATTERN = re.compile(r"\\section\{([^}]*)\}")
 ITEM_PATTERN = re.compile(r"\\item\b")
 HREF_PATTERN = re.compile(r"\\href\{([^}]*)\}")
+
+
+def _normalize_url(url):
+    return re.sub(r"[^a-z0-9]", "", url.lower())
+
+
+def reconcile_near_duplicate_hrefs(original_tex, candidate_tex):
+    """Models have a strong habit of "fixing" what they perceive as a typo in an existing URL
+    (e.g. rewriting pyspark-recommentation to pyspark-recommendation) even when explicitly told
+    not to touch existing links. Rather than keep fighting that with more prompt instructions,
+    silently correct any such near-duplicate back to the original exact URL before validation."""
+    orig_hrefs = HREF_PATTERN.findall(original_tex)
+    candidate_hrefs = set(HREF_PATTERN.findall(candidate_tex))
+    orig_set = set(orig_hrefs)
+
+    fixed_tex = candidate_tex
+    for href in candidate_hrefs - orig_set:
+        normalized = _normalize_url(href)
+        best_match, best_ratio = None, 0.0
+        for o in orig_hrefs:
+            if o == href:
+                continue
+            ratio = difflib.SequenceMatcher(None, normalized, _normalize_url(o)).ratio()
+            if ratio > best_ratio:
+                best_match, best_ratio = o, ratio
+        match = best_match if best_ratio >= 0.85 else None
+        if match:
+            fixed_tex = fixed_tex.replace(href, match)
+
+    return fixed_tex
 
 JUDGE_PROMPT_TEMPLATE = """
 You are a strict reviewer checking a generated {document_type} against these rules:

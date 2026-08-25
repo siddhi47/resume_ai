@@ -179,6 +179,7 @@ Rules:
 - Only rewrite the wording of existing bullet points, summary text, and skill list ordering to better match the job description.
 - Do not invent or fabricate any experience, employer, title, date, skill, or metric that is not already present in the original resume or explicitly given to you as a verified GitHub project below.
 - You may reorder bullet points within a section, and reorder items within a skills list, by relevance to the job, but every original bullet/skill must still appear somewhere.
+- Copy every existing \\href{{URL}} exactly character-for-character, even if a URL looks misspelled — it is a real link and "fixing" it will break it. Never alter, "correct", or retype an existing URL.
 - Return the complete, compilable .tex file and nothing else: no explanation, no markdown code fences, no commentary before or after.
 
 Relevant GitHub Projects:

@@ -27,6 +27,7 @@ from src.resume_bot.agent.validation import (
     COVER_LETTER_JUDGE_RULES,
     RESUME_JUDGE_RULES,
     generate_with_validation,
+    reconcile_near_duplicate_hrefs,
     surgical_fix,
     validate_cover_letter_text,
     validate_tailored_resume_structure,
@@ -227,7 +228,8 @@ def generate_tailored_resume(
             relevant_projects=relevant_projects or "None found.",
             revision_feedback=feedback,
         )
-        return strip_code_fence(raw)
+        candidate = strip_code_fence(raw)
+        return reconcile_near_duplicate_hrefs(tex_source, candidate)
 
     def check(candidate_tex):
         issues = validate_tailored_resume_structure(
@@ -251,7 +253,8 @@ def generate_tailored_resume(
         return []
 
     def fix(text, issues):
-        return strip_code_fence(surgical_fix("tailored LaTeX resume", text, issues))
+        fixed = strip_code_fence(surgical_fix("tailored LaTeX resume", text, issues))
+        return reconcile_near_duplicate_hrefs(tex_source, fixed)
 
     judge_rules = RESUME_JUDGE_RULES
     if relevant_projects:
