@@ -2,7 +2,7 @@ import asyncio
 import os
 
 import aiosqlite
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -47,6 +47,41 @@ def _build_agent(tools, checkpointer):
     )
 
 
+async def _heal_incomplete_tool_calls(agent, config):
+    """If a previous turn was interrupted (crash, worker restart, deploy) after the model
+    requested tool calls but before they finished, the checkpoint is left with an AIMessage
+    whose tool_calls have no matching ToolMessage. Every future turn on that thread then fails
+    _validate_chat_history before the model is ever called, permanently bricking the
+    conversation. Detect that and inject placeholder ToolMessages so the thread can proceed."""
+    snapshot = await agent.aget_state(config)
+    messages = snapshot.values.get("messages", []) if snapshot else []
+    if not messages:
+        return
+
+    resolved_ids = {m.tool_call_id for m in messages if isinstance(m, ToolMessage)}
+    unresolved_ids = [
+        call["id"]
+        for m in messages
+        if isinstance(m, AIMessage)
+        for call in (m.tool_calls or [])
+        if call["id"] not in resolved_ids
+    ]
+    if not unresolved_ids:
+        return
+
+    healing_messages = [
+        ToolMessage(
+            content=(
+                "(This tool call was interrupted before it finished, e.g. by a server restart, "
+                "and its result was lost. Retry it if the answer still needs it.)"
+            ),
+            tool_call_id=call_id,
+        )
+        for call_id in unresolved_ids
+    ]
+    await agent.aupdate_state(config, {"messages": healing_messages}, as_node="tools")
+
+
 async def _invoke(message: str, thread_id: str, user_id: str) -> dict:
     _ensure_data_dir()
     config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
@@ -56,6 +91,7 @@ async def _invoke(message: str, thread_id: str, user_id: str) -> dict:
 
     async with AsyncSqliteSaver.from_conn_string(CHECKPOINT_DB_PATH) as checkpointer:
         agent = _build_agent(tools, checkpointer)
+        await _heal_incomplete_tool_calls(agent, config)
         return await agent.ainvoke(
             {"messages": [HumanMessage(content=message)]}, config=config
         )
