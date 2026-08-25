@@ -10,6 +10,7 @@
 <body>
     <div class="container">
         <h1>Chat with AI Assistant</h1>
+        <p><a href="{{ url_for('agent_chat') }}">Try the new agent chatbot &rarr;</a></p>
 
         <div class="chat-container">
             <!-- Displaying the chat responses -->
@@ -18,12 +19,33 @@
                     <div class="answer-box">
                         <pre>{{ answer }}</pre>
                     </div>
+                    <a href="{{ url_for('download_pdf') }}">
+                        <button type="button">Download as PDF</button>
+                    </a>
                 {% endif %}
             </div>
 
             <!-- Form Section -->
             <form method="POST" enctype="multipart/form-data" class="chat-form">
                 {{ form.hidden_tag() }}
+                {% if form.errors %}
+                    <div class="form-errors">
+                        {% for field_name, field_errors in form.errors.items() %}
+                            {% for error in field_errors %}
+                                <p>{{ form[field_name].label.text }}: {{ error }}</p>
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% with messages = get_flashed_messages() %}
+                    {% if messages %}
+                        <div class="form-errors">
+                            {% for message in messages %}
+                                <p>{{ message }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
                 <div class="form-section">
                     <div class="resume-upload">
                         {{ form.resume.label }}<br>
@@ -38,6 +60,7 @@
                         {{ form.question(size=50) }}
                     </div>
                     <button type="submit">Ask Question</button>
+                    <button type="submit" formaction="{{ url_for('download_resume') }}" formtarget="_blank">Download Tailored Resume</button>
                 </div>
             </form>
         </div>

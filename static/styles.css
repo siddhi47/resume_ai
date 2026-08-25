@@ -184,6 +184,15 @@ h1 {
     overflow-y: auto;
 }
 
+.question-box {
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    padding: 15px;
+    border-radius: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 pre {
     margin: 0;
     font-size: 1rem;
@@ -235,6 +244,20 @@ form button {
 
 form button:hover {
     background-color: #45a049;
+}
+
+/* Form Errors */
+.form-errors {
+    background-color: #fdecea;
+    color: #b3261e;
+    border: 1px solid #f5c6cb;
+    border-radius: 6px;
+    padding: 12px 15px;
+    margin-bottom: 15px;
+}
+
+.form-errors p {
+    margin: 4px 0;
 }
 
 /* Extracted Information Section */

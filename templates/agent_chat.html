@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Agent Chat</h1>
+        <p><a href="{{ url_for('chat') }}">&larr; Back to the classic form</a></p>
+
+        <div class="chat-container">
+            <div class="chat-box">
+                {% for msg in history %}
+                    {% if msg.role == 'assistant' %}
+                        <div class="answer-box">
+                            <pre>{{ msg.content }}</pre>
+                        </div>
+                    {% else %}
+                        <div class="question-box">
+                            <pre>{{ msg.content }}</pre>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+                {% if artifact_path %}
+                    <a href="{{ url_for('agent_download', filename=artifact_path) }}" target="_blank">
+                        <button type="button">Download {{ artifact_label }}</button>
+                    </a>
+                {% endif %}
+            </div>
+
+            <form method="POST" class="chat-form">
+                <div class="form-section">
+                    <div>
+                        <label for="message">Message</label><br>
+                        <textarea id="message" name="message" rows="4" cols="60" required
+                            placeholder="Paste a job description, a job posting URL, or ask a question..."></textarea>
+                    </div>
+                    <button type="submit">Send</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer>
+        <p>Siddhi &copy; 2025</p>
+    </footer>
+</body>
+</html>

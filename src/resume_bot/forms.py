@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, FileField, SubmitField
-from wtforms.validators import DataRequired
+from wtforms.validators import DataRequired, Optional
 
 
 class LoginForm(FlaskForm):
@@ -12,5 +12,5 @@ class LoginForm(FlaskForm):
 class ResumeChatForm(FlaskForm):
     resume = FileField("Upload Resume (PDF)")
     job_description = TextAreaField("Job Description", validators=[DataRequired()])
-    question = StringField("Your Query", validators=[DataRequired()])
+    question = StringField("Your Query", validators=[Optional()])
     submit = SubmitField("Ask")
