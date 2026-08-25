@@ -181,6 +181,12 @@ Rules:
 - You may reorder bullet points within a section, and reorder items within a skills list, by relevance to the job, but every original bullet/skill must still appear somewhere.
 - Return the complete, compilable .tex file and nothing else: no explanation, no markdown code fences, no commentary before or after.
 
+Relevant GitHub Projects:
+- {relevant_projects}
+- Use this only as a signal for which EXISTING bullets/skills to prioritize when reordering. Do
+  not add a new bullet, project entry, or link for anything listed here that isn't already in the
+  Original Resume below — that would violate the "no new content" rule above.
+
 Revision feedback:
 - {revision_feedback}
 - If the above is not "None.", it describes a problem with a previous attempt (e.g. a compile error, a dropped bullet, or a fabricated detail). Fix that specific problem while keeping everything else the same.

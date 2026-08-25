@@ -163,8 +163,16 @@ def generate_tailored_resume(
     job_description: str,
     tool_call_id: Annotated[str, InjectedToolCallId],
     config: RunnableConfig,
+    relevant_projects: str = "",
 ) -> Command:
-    """Tailor the user's LaTeX resume template to the given job description and compile it to a downloadable PDF."""
+    """Tailor the user's LaTeX resume template to the given job description and compile it to a downloadable PDF.
+
+    If you already looked up the candidate's real GitHub repositories earlier in this conversation
+    and found ones especially relevant to this job, pass a short summary of them (name + why
+    relevant) as relevant_projects. This only affects which EXISTING resume bullets/skills get
+    emphasized or reordered — the resume can't add new bullets, projects, or links, so don't expect
+    GitHub findings to appear as new content, only as a signal for what to prioritize.
+    """
     user_id = config["configurable"]["user_id"]
     job_summary, company = get_job_context(job_description)
 
@@ -189,7 +197,12 @@ def generate_tailored_resume(
 
     resume_llm = ChatOpenAI(temperature=0, model="gpt-4o")
     resume_prompt = PromptTemplate(
-        input_variables=["tex_source", "job_description", "revision_feedback"],
+        input_variables=[
+            "tex_source",
+            "job_description",
+            "relevant_projects",
+            "revision_feedback",
+        ],
         template=RESUME_TAILORING_PROMPT_TEMPLATE,
     )
     resume_chain = LLMChain(llm=resume_llm, prompt=resume_prompt)
@@ -205,6 +218,7 @@ def generate_tailored_resume(
         raw = resume_chain.run(
             tex_source=tex_source,
             job_description=job_summary,
+            relevant_projects=relevant_projects or "None found.",
             revision_feedback=feedback,
         )
         return strip_code_fence(raw)

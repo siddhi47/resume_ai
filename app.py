@@ -12,6 +12,7 @@ from flask import (
     send_file,
     send_from_directory,
     flash,
+    jsonify,
 )
 from flask_login import (
     LoginManager,
@@ -205,6 +206,7 @@ def download_resume():
         resume_chain.run(
             tex_source=tex_source,
             job_description=job_summary,
+            relevant_projects="None found.",
             revision_feedback="None.",
         )
     )
@@ -245,23 +247,50 @@ def download_resume():
     )
 
 
-@app.route("/agent", methods=["GET", "POST"])
+@app.route("/agent", methods=["GET"])
 @login_required
 def agent_chat():
     thread_id = current_user.id
-
-    if request.method == "POST":
-        message = (request.form.get("message") or "").strip()
-        if message:
-            invoke_agent_sync(message, thread_id, current_user.id)
-
     history, artifact_path, artifact_label = get_conversation_history(thread_id)
+    initial_artifact = None
+    if artifact_path:
+        initial_artifact = {
+            "url": url_for("agent_download", filename=artifact_path),
+            "label": artifact_label or artifact_path,
+        }
     return render_template(
         "agent_chat.html",
         history=history,
-        artifact_path=artifact_path,
-        artifact_label=artifact_label,
+        initial_artifact=initial_artifact,
     )
+
+
+@app.route("/agent/message", methods=["POST"])
+@login_required
+def agent_message():
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"error": "empty message"}), 400
+
+    thread_id = current_user.id
+    result = invoke_agent_sync(message, thread_id, current_user.id)
+
+    reply = ""
+    for m in reversed(result.get("messages", [])):
+        if getattr(m, "type", None) == "ai" and m.content:
+            reply = m.content
+            break
+
+    artifact_path = result.get("last_artifact_path")
+    artifact = None
+    if artifact_path:
+        artifact = {
+            "url": url_for("agent_download", filename=artifact_path),
+            "label": result.get("last_artifact_label") or artifact_path,
+        }
+
+    return jsonify({"reply": reply, "artifact": artifact})
 
 
 @app.route("/agent/download/<path:filename>")

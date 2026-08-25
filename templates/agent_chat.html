@@ -12,33 +12,16 @@
         <p><a href="{{ url_for('chat') }}">&larr; Back to the classic form</a></p>
 
         <div class="chat-container">
-            <div class="chat-box">
-                {% for msg in history %}
-                    {% if msg.role == 'assistant' %}
-                        <div class="answer-box">
-                            <pre>{{ msg.content }}</pre>
-                        </div>
-                    {% else %}
-                        <div class="question-box">
-                            <pre>{{ msg.content }}</pre>
-                        </div>
-                    {% endif %}
-                {% endfor %}
-                {% if artifact_path %}
-                    <a href="{{ url_for('agent_download', filename=artifact_path) }}" target="_blank">
-                        <button type="button">Download {{ artifact_label }}</button>
-                    </a>
-                {% endif %}
-            </div>
+            <div class="chat-box" id="chat-box"></div>
 
-            <form method="POST" class="chat-form">
+            <form id="chat-form" class="chat-form">
                 <div class="form-section">
                     <div>
                         <label for="message">Message</label><br>
-                        <textarea id="message" name="message" rows="4" cols="60" required
-                            placeholder="Paste a job description, a job posting URL, or ask a question..."></textarea>
+                        <textarea id="message" name="message" rows="3" cols="60" required
+                            placeholder="Paste a job description, a job posting URL, or ask a question... (Enter to send, Shift+Enter for a new line)"></textarea>
                     </div>
-                    <button type="submit">Send</button>
+                    <button type="submit" id="send-button">Send</button>
                 </div>
             </form>
         </div>
@@ -47,5 +30,129 @@
     <footer>
         <p>Siddhi &copy; 2025</p>
     </footer>
+
+    <script type="application/json" id="initial-history">{{ history | tojson }}</script>
+    <script type="application/json" id="initial-artifact">{{ initial_artifact | tojson }}</script>
+
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        const form = document.getElementById('chat-form');
+        const textarea = document.getElementById('message');
+        const sendButton = document.getElementById('send-button');
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function renderMarkdown(text) {
+            let safe = escapeHtml(text);
+            safe = safe.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+                '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            safe = safe.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+            return safe
+                .split(/\n{2,}/)
+                .map(function (p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; })
+                .join('');
+        }
+
+        function scrollToBottom() {
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function appendMessage(role, text) {
+            const div = document.createElement('div');
+            div.className = role === 'assistant' ? 'answer-box' : 'question-box';
+            div.innerHTML = renderMarkdown(text);
+            chatBox.appendChild(div);
+            scrollToBottom();
+            return div;
+        }
+
+        function appendArtifactLink(container, artifact) {
+            if (!artifact) return;
+            const link = document.createElement('a');
+            link.href = artifact.url;
+            link.target = '_blank';
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = 'Download ' + artifact.label;
+            link.appendChild(button);
+            container.appendChild(link);
+            scrollToBottom();
+        }
+
+        function showTypingIndicator() {
+            const div = document.createElement('div');
+            div.className = 'answer-box typing-indicator';
+            div.id = 'typing-indicator';
+            div.innerHTML = '<span></span><span></span><span></span>';
+            chatBox.appendChild(div);
+            scrollToBottom();
+        }
+
+        function removeTypingIndicator() {
+            const el = document.getElementById('typing-indicator');
+            if (el) el.remove();
+        }
+
+        // Render history from the initial page load.
+        (function loadInitialHistory() {
+            const history = JSON.parse(document.getElementById('initial-history').textContent || '[]');
+            const initialArtifact = JSON.parse(document.getElementById('initial-artifact').textContent || 'null');
+            history.forEach(function (msg, index) {
+                const el = appendMessage(msg.role, msg.content);
+                if (initialArtifact && msg.role === 'assistant' && index === history.length - 1) {
+                    appendArtifactLink(el, initialArtifact);
+                }
+            });
+            scrollToBottom();
+        })();
+
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const message = textarea.value.trim();
+            if (!message) return;
+
+            appendMessage('user', message);
+            textarea.value = '';
+            textarea.disabled = true;
+            sendButton.disabled = true;
+            showTypingIndicator();
+
+            try {
+                const resp = await fetch('{{ url_for("agent_message") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message }),
+                });
+                removeTypingIndicator();
+
+                if (!resp.ok) {
+                    appendMessage('assistant', 'Something went wrong sending that message. Please try again.');
+                } else {
+                    const data = await resp.json();
+                    const el = appendMessage('assistant', data.reply || '(no response)');
+                    appendArtifactLink(el, data.artifact);
+                }
+            } catch (err) {
+                removeTypingIndicator();
+                appendMessage('assistant', 'Network error — please try again.');
+            } finally {
+                textarea.disabled = false;
+                sendButton.disabled = false;
+                textarea.focus();
+            }
+        });
+
+        textarea.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                form.requestSubmit();
+            }
+        });
+    </script>
 </body>
 </html>
