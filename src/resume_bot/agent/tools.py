@@ -219,7 +219,11 @@ def generate_tailored_resume(
 
     # URLs the caller explicitly vouched for (from relevant_projects) are allowed to appear as
     # new links in the tailored resume — anything else new is treated as a likely fabrication.
-    allowed_extra_hrefs = set(re.findall(r"https?://\S+", relevant_projects or ""))
+    # Excludes trailing punctuation/closing brackets so "(https://.../repo): description" doesn't
+    # capture the URL with a stray "):" stuck to the end.
+    allowed_extra_hrefs = set(
+        re.findall(r"https?://[^\s)\]},;:'\"<>]+", relevant_projects or "")
+    )
 
     def attempt(feedback):
         raw = resume_chain.run(
@@ -253,23 +257,43 @@ def generate_tailored_resume(
         return []
 
     def fix(text, issues):
-        fixed = strip_code_fence(surgical_fix("tailored LaTeX resume", text, issues))
+        augmented_issues = list(issues)
+        if any("failed to compile" in issue.lower() for issue in issues):
+            augmented_issues.append(
+                "Check every \\href and any other new text for unescaped LaTeX special "
+                "characters (especially underscores in GitHub repo names/URLs) and escape them "
+                "as \\_, \\&, \\%, \\# — this is the most common cause of a compile failure here."
+            )
+        fixed = strip_code_fence(surgical_fix("tailored LaTeX resume", text, augmented_issues))
         return reconcile_near_duplicate_hrefs(tex_source, fixed)
 
-    judge_rules = RESUME_JUDGE_RULES
+    judge_rules = (
+        RESUME_JUDGE_RULES
+        + "\n\nOriginal Resume (for reference only — every entry already present here is "
+        "pre-existing and legitimate, NOT a fabrication, even if it's not mentioned below):\n"
+        + tex_source
+    )
     if relevant_projects:
         judge_rules += (
             f"\n\nThe following GitHub projects were verified as real and may legitimately appear "
             f"as new Projects-section entries — do not flag these as fabricated:\n{relevant_projects}"
         )
 
+    debug_trace = []
     tailored_tex, remaining_issues = generate_with_validation(
         attempt_fn=attempt,
         deterministic_check_fn=check,
         judge_rules=judge_rules,
         document_type="tailored LaTeX resume",
         fix_fn=fix,
+        trace=debug_trace,
     )
+    debug_trace_path = os.environ.get("RESUME_DEBUG_TRACE_PATH")
+    if debug_trace_path:
+        import json as _json
+
+        with open(debug_trace_path, "w", encoding="utf-8") as f:
+            _json.dump(debug_trace, f, indent=2)
 
     company_sanitized = sanitize_filename_part(company)
     base_filename = f"Resume{company_sanitized}" if company_sanitized else "Resume"

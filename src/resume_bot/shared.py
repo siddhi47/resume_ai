@@ -1,10 +1,20 @@
+import html as html_lib
 import re
 
 from langchain.chat_models import ChatOpenAI
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from fpdf import FPDF
-from fpdf.enums import XPos, YPos
+
+MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
+
+
+def _line_to_html(line):
+    # Escape first so real markup can't be injected via the LLM's own text, then convert the
+    # one markdown construct we care about (links) into a real, clickable <a> tag — otherwise
+    # a link like [project](https://...) would render as inert bracket text in the PDF.
+    escaped = html_lib.escape(line)
+    return MARKDOWN_LINK_PATTERN.sub(r'<a href="\2">\1</a>', escaped)
 
 
 def generate_pdf(text):
@@ -17,16 +27,16 @@ def generate_pdf(text):
     pdf.add_page()
     pdf.set_font("Times", size=12)
 
-    line_height = 6
-    paragraph_spacing = 4
-    for i, paragraph in enumerate(paragraphs):
+    html_paragraphs = []
+    for paragraph in paragraphs:
         lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
-        for line in lines:
-            pdf.multi_cell(
-                0, line_height, line, align="L", new_x=XPos.LMARGIN, new_y=YPos.NEXT
-            )
-        if i != len(paragraphs) - 1:
-            pdf.ln(paragraph_spacing)
+        if lines:
+            html_paragraphs.append("<br>".join(_line_to_html(line) for line in lines))
+
+    pdf.write_html(
+        "".join(f"<p>{p}</p>" for p in html_paragraphs),
+        font_family="Times",
+    )
 
     return bytes(pdf.output())
 
@@ -180,6 +190,7 @@ Rules:
 - Do not invent or fabricate any experience, employer, title, date, skill, or metric that is not already present in the original resume or explicitly given to you as a verified GitHub project below.
 - You may reorder bullet points within a section, and reorder items within a skills list, by relevance to the job, but every original bullet/skill must still appear somewhere.
 - Copy every existing \\href{{URL}} exactly character-for-character, even if a URL looks misspelled — it is a real link and "fixing" it will break it. Never alter, "correct", or retype an existing URL.
+- In any NEW text you write (a new project's name, description, or a \\href's display text), escape LaTeX special characters or the document will fail to compile: underscore as \\_, ampersand as \\&, percent as \\%, hash as \\#. This matters most for GitHub repo names/URLs, which often contain underscores — e.g. write \\href{{https://github.com/user/my_repo}}{{github.com/user/my\\_repo}}, never the unescaped form.
 - Return the complete, compilable .tex file and nothing else: no explanation, no markdown code fences, no commentary before or after.
 
 Relevant GitHub Projects:

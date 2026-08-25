@@ -2,7 +2,7 @@ import asyncio
 import os
 
 import aiosqlite
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -14,7 +14,6 @@ from langgraph.prebuilt import create_react_agent
 if not hasattr(aiosqlite.Connection, "is_alive"):
     aiosqlite.Connection.is_alive = lambda self: True
 
-from src.resume_bot.agent.gatekeeper import REJECTION_MESSAGE, is_in_scope
 from src.resume_bot.agent.mcp import load_github_tools
 from src.resume_bot.agent.prompts import get_system_prompt
 from src.resume_bot.agent.state import AgentState
@@ -51,19 +50,6 @@ def _build_agent(tools, checkpointer):
 async def _invoke(message: str, thread_id: str, user_id: str) -> dict:
     _ensure_data_dir()
     config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
-
-    if not await is_in_scope(message):
-        # Rejected before any tool-calling agent runs: cheap, and keeps off-topic requests
-        # from ever reaching the real (more expensive, tool-equipped) model.
-        async with AsyncSqliteSaver.from_conn_string(CHECKPOINT_DB_PATH) as checkpointer:
-            agent = _build_agent(LOCAL_TOOLS, checkpointer)
-            ai_message = AIMessage(content=REJECTION_MESSAGE)
-            await agent.aupdate_state(
-                config,
-                {"messages": [HumanMessage(content=message), ai_message]},
-                as_node="agent",
-            )
-            return {"messages": [ai_message]}
 
     github_tools = await load_github_tools()
     tools = LOCAL_TOOLS + github_tools

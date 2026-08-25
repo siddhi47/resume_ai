@@ -181,6 +181,7 @@ def generate_with_validation(
     document_type,
     max_attempts=2,
     fix_fn=None,
+    trace=None,
 ):
     """Runs attempt_fn(feedback) up to max_attempts times.
 
@@ -200,15 +201,38 @@ def generate_with_validation(
     last_text = ""
     last_issues = []
 
-    for _ in range(max_attempts):
+    for attempt_num in range(1, max_attempts + 1):
         last_text = attempt_fn(feedback)
         issues = deterministic_check_fn(last_text)
+        judge_verdict = None
 
         if not issues:
             passed, judge_feedback = judge_document(document_type, judge_rules, last_text)
+            judge_verdict = "PASS" if passed else judge_feedback
             if passed:
+                if trace is not None:
+                    trace.append(
+                        {
+                            "stage": f"attempt-{attempt_num}",
+                            "text": last_text,
+                            "deterministic_issues": [],
+                            "judge_verdict": judge_verdict,
+                            "result": "PASSED",
+                        }
+                    )
                 return last_text, []
             issues = [judge_feedback]
+
+        if trace is not None:
+            trace.append(
+                {
+                    "stage": f"attempt-{attempt_num}",
+                    "text": last_text,
+                    "deterministic_issues": issues if judge_verdict is None else [],
+                    "judge_verdict": judge_verdict,
+                    "result": "FAILED",
+                }
+            )
 
         last_issues = issues
         feedback = "; ".join(issues)
@@ -218,15 +242,41 @@ def generate_with_validation(
 
     fixer = fix_fn or (lambda text, issues: surgical_fix(document_type, text, issues))
     fixed_text = fixer(last_text, last_issues)
-    fixed_issues = deterministic_check_fn(fixed_text)
+    deterministic_fixed_issues = deterministic_check_fn(fixed_text)
+    fixed_issues = deterministic_fixed_issues
+    fix_judge_verdict = None
     if not fixed_issues:
         passed, judge_feedback = judge_document(document_type, judge_rules, fixed_text)
+        fix_judge_verdict = "PASS" if passed else judge_feedback
         if not passed:
             fixed_issues = [judge_feedback]
 
-    # Prefer the fixed draft unless it's strictly worse — a fix that doesn't fully satisfy the
-    # judge is still closer to correct than reverting to the pre-fix draft.
+    if trace is not None:
+        trace.append(
+            {
+                "stage": "surgical-fix",
+                "text": fixed_text,
+                "deterministic_issues": deterministic_fixed_issues,
+                "judge_verdict": fix_judge_verdict,
+                "result": "PASSED" if not fixed_issues else "FAILED",
+                "issues_given_to_fixer": last_issues,
+            }
+        )
+
+    # A compile failure is never an acceptable trade for some other issue, even a "smaller" one by
+    # count — e.g. a surgical fix that resolves a fabrication complaint but leaves behind an
+    # unescaped underscore in a new \href introduces a NEW, fatal problem that raw issue-count
+    # comparison would otherwise miss (1 issue -> 1 different issue looks like "no worse").
+    if _has_compile_failure(fixed_issues) and not _has_compile_failure(last_issues):
+        return last_text, last_issues
+
+    # Otherwise, prefer the fixed draft unless it's strictly worse — a fix that doesn't fully
+    # satisfy the judge is still closer to correct than reverting to the pre-fix draft.
     if len(fixed_issues) <= len(last_issues):
         return fixed_text, fixed_issues
 
     return last_text, last_issues
+
+
+def _has_compile_failure(issues):
+    return any("failed to compile" in issue.lower() for issue in issues)
