@@ -2,6 +2,7 @@ import os
 import io
 import subprocess
 import tempfile
+import uuid
 from flask import (
     Flask,
     render_template,
@@ -247,10 +248,16 @@ def download_resume():
     )
 
 
+def _agent_thread_id():
+    # Defaults to the user's id (the original single-thread behavior) so existing sessions/
+    # conversations keep working; a "New Chat" click stores a fresh id here instead.
+    return session.setdefault("agent_thread_id", current_user.id)
+
+
 @app.route("/agent", methods=["GET"])
 @login_required
 def agent_chat():
-    thread_id = current_user.id
+    thread_id = _agent_thread_id()
     history, artifact_path, artifact_label = get_conversation_history(thread_id)
     initial_artifact = None
     if artifact_path:
@@ -265,6 +272,13 @@ def agent_chat():
     )
 
 
+@app.route("/agent/new", methods=["POST"])
+@login_required
+def agent_new_chat():
+    session["agent_thread_id"] = f"{current_user.id}:{uuid.uuid4().hex[:12]}"
+    return redirect(url_for("agent_chat"))
+
+
 @app.route("/agent/message", methods=["POST"])
 @login_required
 def agent_message():
@@ -273,7 +287,7 @@ def agent_message():
     if not message:
         return jsonify({"error": "empty message"}), 400
 
-    thread_id = current_user.id
+    thread_id = _agent_thread_id()
     result = invoke_agent_sync(message, thread_id, current_user.id)
 
     reply = ""

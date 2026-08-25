@@ -178,6 +178,31 @@ h1 {
 
 /* Agent chat: scrollable message list with bubble-style turns (scoped so the classic
    single-answer /chat page's .answer-box styling is untouched). */
+.agent-chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.agent-chat-header h1 {
+    margin-bottom: 0;
+}
+
+.new-chat-button {
+    background-color: transparent;
+    color: #007BFF;
+    border: 1px solid #007BFF;
+    padding: 8px 14px;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.new-chat-button:hover {
+    background-color: #007BFF;
+    color: white;
+}
+
 #chat-box {
     display: flex;
     flex-direction: column;

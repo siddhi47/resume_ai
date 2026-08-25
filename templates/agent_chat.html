@@ -8,7 +8,12 @@
 </head>
 <body>
     <div class="container">
-        <h1>Agent Chat</h1>
+        <div class="agent-chat-header">
+            <h1>Agent Chat</h1>
+            <form action="{{ url_for('agent_new_chat') }}" method="post">
+                <button type="submit" class="new-chat-button">+ New Chat</button>
+            </form>
+        </div>
         <p><a href="{{ url_for('chat') }}">&larr; Back to the classic form</a></p>
 
         <div class="chat-container">
