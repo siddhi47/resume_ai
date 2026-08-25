@@ -36,6 +36,7 @@ from src.resume_bot.shared import (
     CONTACT_INFO_PROMPT_TEMPLATE,
 )
 from src.resume_bot.agent.graph import invoke_agent_sync, get_conversation_history
+from src.resume_bot.agent.planned_graph import invoke_planned_sync, get_planned_history
 import hashlib
 
 # LangChain & OpenAI
@@ -305,6 +306,67 @@ def agent_message():
         }
 
     return jsonify({"reply": reply, "artifact": artifact})
+
+
+def _planned_thread_id():
+    return session.setdefault("planned_thread_id", f"planned:{current_user.id}")
+
+
+def _artifact_links(artifacts):
+    return [
+        {
+            "url": url_for("agent_download", filename=a["path"]),
+            "label": a.get("label") or a["path"],
+        }
+        for a in artifacts or []
+    ]
+
+
+@app.route("/planned", methods=["GET"])
+@login_required
+def planned_chat():
+    history, artifacts = get_planned_history(_planned_thread_id())
+    return render_template(
+        "planned_chat.html",
+        history=history,
+        initial_artifacts=_artifact_links(artifacts),
+    )
+
+
+@app.route("/planned/new", methods=["POST"])
+@login_required
+def planned_new_chat():
+    session["planned_thread_id"] = f"planned:{current_user.id}:{uuid.uuid4().hex[:12]}"
+    return redirect(url_for("planned_chat"))
+
+
+@app.route("/planned/message", methods=["POST"])
+@login_required
+def planned_message():
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"error": "empty message"}), 400
+
+    # Read session data here, in the request thread, rather than inside a graph node —
+    # Flask's context locals don't reliably reach LangGraph's executor threads.
+    result = invoke_planned_sync(
+        message,
+        _planned_thread_id(),
+        current_user.id,
+        resume_summary=session.get("resume_summary") or "",
+        contact_info=session.get("extracted_info") or "",
+    )
+
+    reply = ""
+    for m in reversed(result.get("messages", [])):
+        if getattr(m, "type", None) == "ai" and m.content:
+            reply = m.content
+            break
+
+    return jsonify(
+        {"reply": reply, "artifacts": _artifact_links(result.get("artifacts"))}
+    )
 
 
 @app.route("/agent/download/<path:filename>")

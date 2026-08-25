@@ -1,6 +1,3 @@
-import os
-import re
-import subprocess
 from typing import Annotated
 
 import requests
@@ -15,31 +12,13 @@ from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.types import Command
 
 from src.resume_bot.shared import (
-    COVER_LETTER_PROMPT_TEMPLATE,
-    RESUME_TAILORING_PROMPT_TEMPLATE,
     GENERIC_QA_PROMPT_TEMPLATE,
-    generate_pdf,
     get_job_context,
-    sanitize_filename_part,
-    strip_code_fence,
 )
-from src.resume_bot.agent.validation import (
-    COVER_LETTER_JUDGE_RULES,
-    RESUME_JUDGE_RULES,
-    generate_with_validation,
-    reconcile_near_duplicate_hrefs,
-    surgical_fix,
-    validate_cover_letter_text,
-    validate_tailored_resume_structure,
+from src.resume_bot.agent.generation import (
+    build_cover_letter,
+    build_tailored_resume,
 )
-
-import datetime
-
-
-def _artifact_dir(user_id: str) -> str:
-    path = os.path.join("data", "agent_artifacts", user_id)
-    os.makedirs(path, exist_ok=True)
-    return path
 
 
 @tool
@@ -100,47 +79,15 @@ def generate_cover_letter(
     or invent project details here.
     """
     user_id = config["configurable"]["user_id"]
-    resume_summary = session.get("resume_summary") or ""
-    contact_info = session.get("extracted_info") or ""
-    job_summary, company = get_job_context(job_description)
-
-    llm = ChatOpenAI(temperature=0.5)
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    prompt = PromptTemplate(
-        input_variables=[
-            "resume_summary",
-            "job_description",
-            "contact_info",
-            "relevant_projects",
-            "revision_feedback",
-        ],
-        template=COVER_LETTER_PROMPT_TEMPLATE,
-    )
-    chain = LLMChain(llm=llm, prompt=prompt)
-
-    def attempt(feedback):
-        return chain.run(
-            resume_summary=resume_summary,
-            job_description=job_summary,
-            contact_info=contact_info,
-            today=today,
-            relevant_projects=relevant_projects or "None found.",
-            revision_feedback=feedback,
-        )
-
-    letter_text, remaining_issues = generate_with_validation(
-        attempt_fn=attempt,
-        deterministic_check_fn=validate_cover_letter_text,
-        judge_rules=COVER_LETTER_JUDGE_RULES,
-        document_type="cover letter",
+    result = build_cover_letter(
+        user_id=user_id,
+        job_description=job_description,
+        resume_summary=session.get("resume_summary") or "",
+        contact_info=session.get("extracted_info") or "",
+        relevant_projects=relevant_projects,
     )
 
-    out_dir = _artifact_dir(user_id)
-    filename = f"CoverLetter{sanitize_filename_part(company)}.pdf"
-    with open(os.path.join(out_dir, filename), "wb") as f:
-        f.write(generate_pdf(letter_text))
-
-    label = f"Cover Letter for {company}" if company else "Cover Letter"
+    remaining_issues = result["remaining_issues"]
     note = (
         f" (validation could not fully confirm this after several attempts: {'; '.join(remaining_issues)} — please review before sending)"
         if remaining_issues
@@ -150,12 +97,12 @@ def generate_cover_letter(
         update={
             "messages": [
                 ToolMessage(
-                    content=f"Cover letter drafted and saved.{note}\n\n{letter_text}",
+                    content=f"Cover letter drafted and saved.{note}\n\n{result['letter_text']}",
                     tool_call_id=tool_call_id,
                 )
             ],
-            "last_artifact_path": filename,
-            "last_artifact_label": f"{label} (PDF)",
+            "last_artifact_path": result["filename"],
+            "last_artifact_label": result["label"],
         }
     )
 
@@ -177,159 +124,28 @@ def generate_tailored_resume(
     you expect, when describing the result to the user.
     """
     user_id = config["configurable"]["user_id"]
-    job_summary, company = get_job_context(job_description)
+    result = build_tailored_resume(
+        user_id=user_id,
+        job_description=job_description,
+        relevant_projects=relevant_projects,
+    )
 
-    user_resume_tex_path = f"static/resumes/{user_id}_resume_template.tex"
-    if not os.path.exists(user_resume_tex_path):
+    if result.get("error"):
         return Command(
             update={
                 "messages": [
-                    ToolMessage(
-                        content=(
-                            f"No resume template found at {user_resume_tex_path}. "
-                            "Ask the user to place their resume's .tex file there first."
-                        ),
-                        tool_call_id=tool_call_id,
-                    )
+                    ToolMessage(content=result["error"], tool_call_id=tool_call_id)
                 ]
             }
         )
 
-    with open(user_resume_tex_path, "r", encoding="utf-8", errors="replace") as f:
-        tex_source = f.read()
-
-    resume_llm = ChatOpenAI(temperature=0, model="gpt-4o")
-    resume_prompt = PromptTemplate(
-        input_variables=[
-            "tex_source",
-            "job_description",
-            "relevant_projects",
-            "revision_feedback",
-        ],
-        template=RESUME_TAILORING_PROMPT_TEMPLATE,
-    )
-    resume_chain = LLMChain(llm=resume_llm, prompt=resume_prompt)
-
-    out_dir = _artifact_dir(user_id)
-    tailored_tex_path = os.path.join(out_dir, "tailored_resume.tex")
-    tailored_pdf_path = os.path.join(out_dir, "tailored_resume.pdf")
-    for stale_path in (tailored_tex_path, tailored_pdf_path):
-        if os.path.exists(stale_path):
-            os.remove(stale_path)
-
-    # URLs the caller explicitly vouched for (from relevant_projects) are allowed to appear as
-    # new links in the tailored resume — anything else new is treated as a likely fabrication.
-    # Excludes trailing punctuation/closing brackets so "(https://.../repo): description" doesn't
-    # capture the URL with a stray "):" stuck to the end.
-    allowed_extra_hrefs = set(
-        re.findall(r"https?://[^\s)\]},;:'\"<>]+", relevant_projects or "")
-    )
-
-    def attempt(feedback):
-        raw = resume_chain.run(
-            tex_source=tex_source,
-            job_description=job_summary,
-            relevant_projects=relevant_projects or "None found.",
-            revision_feedback=feedback,
-        )
-        candidate = strip_code_fence(raw)
-        return reconcile_near_duplicate_hrefs(tex_source, candidate)
-
-    def check(candidate_tex):
-        issues = validate_tailored_resume_structure(
-            tex_source, candidate_tex, allowed_extra_hrefs=allowed_extra_hrefs
-        )
-        if issues:
-            return issues
-
-        with open(tailored_tex_path, "w", encoding="utf-8") as f:
-            f.write(candidate_tex)
-        compile_result = subprocess.run(
-            ["tectonic", "--outdir", out_dir, tailored_tex_path],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        if compile_result.returncode != 0 or not os.path.exists(tailored_pdf_path):
-            stderr_lines = (compile_result.stderr or "").strip().splitlines()
-            detail = stderr_lines[-1] if stderr_lines else "unknown compile error"
-            return [f"LaTeX failed to compile: {detail}"]
-        return []
-
-    def fix(text, issues):
-        augmented_issues = list(issues)
-        if any("failed to compile" in issue.lower() for issue in issues):
-            augmented_issues.append(
-                "Check every \\href and any other new text for unescaped LaTeX special "
-                "characters (especially underscores in GitHub repo names/URLs) and escape them "
-                "as \\_, \\&, \\%, \\# — this is the most common cause of a compile failure here."
-            )
-        fixed = strip_code_fence(surgical_fix("tailored LaTeX resume", text, augmented_issues))
-        return reconcile_near_duplicate_hrefs(tex_source, fixed)
-
-    judge_rules = (
-        RESUME_JUDGE_RULES
-        + "\n\nOriginal Resume (for reference only — every entry already present here is "
-        "pre-existing and legitimate, NOT a fabrication, even if it's not mentioned below):\n"
-        + tex_source
-    )
-    if relevant_projects:
-        judge_rules += (
-            f"\n\nThe following GitHub projects were verified as real and may legitimately appear "
-            f"as new Projects-section entries — do not flag these as fabricated:\n{relevant_projects}"
-        )
-
-    debug_trace = []
-    tailored_tex, remaining_issues = generate_with_validation(
-        attempt_fn=attempt,
-        deterministic_check_fn=check,
-        judge_rules=judge_rules,
-        document_type="tailored LaTeX resume",
-        fix_fn=fix,
-        trace=debug_trace,
-    )
-    debug_trace_path = os.environ.get("RESUME_DEBUG_TRACE_PATH")
-    if debug_trace_path:
-        import json as _json
-
-        with open(debug_trace_path, "w", encoding="utf-8") as f:
-            _json.dump(debug_trace, f, indent=2)
-
-    company_sanitized = sanitize_filename_part(company)
-    base_filename = f"Resume{company_sanitized}" if company_sanitized else "Resume"
-
-    if not remaining_issues and os.path.exists(tailored_pdf_path):
-        final_name = f"{base_filename}.pdf"
-        os.replace(tailored_pdf_path, os.path.join(out_dir, final_name))
-        orig_hrefs = set(re.findall(r"\\href\{([^}]*)\}", tex_source))
-        added_hrefs = set(re.findall(r"\\href\{([^}]*)\}", tailored_tex)) - orig_hrefs
-        if added_hrefs:
-            message = (
-                "Tailored resume validated and compiled to PDF, ready for download. Added new "
-                f"Projects-section entries for: {', '.join(sorted(added_hrefs))}."
-            )
-        else:
-            message = (
-                "Tailored resume validated and compiled to PDF, ready for download. No new "
-                "projects were added — existing content was reworded/reordered only."
-            )
-    else:
-        with open(tailored_tex_path, "w", encoding="utf-8") as f:
-            f.write(tailored_tex)
-        final_name = f"{base_filename}.tex"
-        os.replace(tailored_tex_path, os.path.join(out_dir, final_name))
-        issue_text = "; ".join(remaining_issues) if remaining_issues else "unknown issue"
-        message = (
-            f"The tailored resume didn't pass validation after multiple attempts ({issue_text}), "
-            "so I saved the closest .tex draft instead — you can review or compile it manually "
-            "(e.g. via Overleaf)."
-        )
-
     return Command(
         update={
-            "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
-            "last_artifact_path": final_name,
-            "last_artifact_label": f"Tailored Resume ({final_name.rsplit('.', 1)[-1].upper()})",
+            "messages": [
+                ToolMessage(content=result["message"], tool_call_id=tool_call_id)
+            ],
+            "last_artifact_path": result["filename"],
+            "last_artifact_label": result["label"],
         }
     )
 
@@ -340,4 +156,14 @@ LOCAL_TOOLS = [
     answer_application_question,
     generate_cover_letter,
     generate_tailored_resume,
+]
+
+# Everything except the two document generators. The planned graph's question-answering
+# node uses these: it needs real tool use to answer things ("what does this posting say
+# about sponsorship?"), but must not be able to produce a resume or cover letter, since
+# that path exists to enforce the plan/draft approval gates.
+QA_TOOLS = [
+    fetch_job_posting_text,
+    get_resume_context,
+    answer_application_question,
 ]

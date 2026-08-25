@@ -1,10 +1,12 @@
-import os
+from src.resume_bot.agent.mcp import resolve_github_username
 
 
 def get_system_prompt():
     # Read lazily (not at import time): app.py imports this module before calling its own
     # load_dotenv(), so env vars wouldn't be populated yet if this ran at module load.
-    username = os.environ.get("GITHUB_USERNAME", "")
+    # Falls back to the token's own owner, so a missing GITHUB_USERNAME doesn't make a
+    # perfectly working GitHub connection look unavailable to the agent.
+    username = resolve_github_username()
     if username:
         github_note = (
             f'The user\'s GitHub username is "{username}". When calling search_repositories or '

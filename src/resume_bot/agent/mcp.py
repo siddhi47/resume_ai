@@ -13,6 +13,46 @@ WANTED_GITHUB_TOOLS = {"search_repositories", "get_file_contents", "search_code"
 GITHUB_MCP_MODE = os.getenv("GITHUB_MCP_MODE", "hosted")
 
 
+_resolved_username = None
+
+
+def resolve_github_username() -> str:
+    """The GitHub username, from GITHUB_USERNAME or — failing that — from the token itself.
+
+    A valid token already identifies its owner, so requiring a separate env var just creates a
+    way to half-configure the app: tools load fine but the agent is told GitHub is unavailable
+    and never looks anything up. Falling back to /user removes that failure mode entirely.
+    """
+    global _resolved_username
+    username = os.environ.get("GITHUB_USERNAME", "").strip()
+    if username:
+        return username
+    if _resolved_username is not None:
+        return _resolved_username
+
+    _resolved_username = ""
+    token = os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN", "").strip()
+    if token:
+        try:
+            import requests
+
+            resp = requests.get(
+                "https://api.github.com/user",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                _resolved_username = resp.json().get("login") or ""
+                if _resolved_username:
+                    print(
+                        f"[agent] GITHUB_USERNAME not set; resolved '{_resolved_username}' "
+                        "from the token."
+                    )
+        except Exception as exc:
+            print(f"[agent] Could not resolve GitHub username from token: {exc}")
+    return _resolved_username
+
+
 def _github_connection() -> dict:
     token = os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN")
     if not token:

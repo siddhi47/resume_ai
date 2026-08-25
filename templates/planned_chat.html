@@ -3,21 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent Chat</title>
+    <title>Guided Agent</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
     <div class="container">
         <div class="agent-chat-header">
-            <h1>Agent Chat</h1>
-            <form action="{{ url_for('agent_new_chat') }}" method="post">
+            <h1>Guided Agent</h1>
+            <form action="{{ url_for('planned_new_chat') }}" method="post">
                 <button type="submit" class="new-chat-button">+ New Chat</button>
             </form>
         </div>
         <p>
-            <a href="{{ url_for('planned_chat') }}">Guided agent (plan &rarr; approve &rarr; draft)</a>
+            <a href="{{ url_for('agent_chat') }}">&larr; Free-form agent</a>
             &nbsp;|&nbsp;
             <a href="{{ url_for('chat') }}">Classic form</a>
+        </p>
+        <p class="agent-hint">
+            This one always looks up your GitHub and reads the job posting first, shows you a
+            plan, and waits for your OK before writing anything.
         </p>
 
         <div class="chat-container">
@@ -28,7 +32,7 @@
                     <div>
                         <label for="message">Message</label><br>
                         <textarea id="message" name="message" rows="3" cols="60" required
-                            placeholder="Paste a job description, a job posting URL, or ask a question... (Enter to send, Shift+Enter for a new line)"></textarea>
+                            placeholder="Paste a job posting URL or the job description... (Enter to send, Shift+Enter for a new line)"></textarea>
                     </div>
                     <button type="submit" id="send-button">Send</button>
                 </div>
@@ -41,7 +45,7 @@
     </footer>
 
     <script type="application/json" id="initial-history">{{ history | tojson }}</script>
-    <script type="application/json" id="initial-artifact">{{ initial_artifact | tojson }}</script>
+    <script type="application/json" id="initial-artifacts">{{ initial_artifacts | tojson }}</script>
 
     <script>
         const chatBox = document.getElementById('chat-box');
@@ -80,16 +84,17 @@
             return div;
         }
 
-        function appendArtifactLink(container, artifact) {
-            if (!artifact) return;
-            const link = document.createElement('a');
-            link.href = artifact.url;
-            link.target = '_blank';
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.textContent = 'Download ' + artifact.label;
-            link.appendChild(button);
-            container.appendChild(link);
+        function appendArtifactLinks(container, artifacts) {
+            (artifacts || []).forEach(function (artifact) {
+                const link = document.createElement('a');
+                link.href = artifact.url;
+                link.target = '_blank';
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = 'Download ' + artifact.label;
+                link.appendChild(button);
+                container.appendChild(link);
+            });
             scrollToBottom();
         }
 
@@ -107,14 +112,13 @@
             if (el) el.remove();
         }
 
-        // Render history from the initial page load.
         (function loadInitialHistory() {
             const history = JSON.parse(document.getElementById('initial-history').textContent || '[]');
-            const initialArtifact = JSON.parse(document.getElementById('initial-artifact').textContent || 'null');
+            const initialArtifacts = JSON.parse(document.getElementById('initial-artifacts').textContent || '[]');
             history.forEach(function (msg, index) {
                 const el = appendMessage(msg.role, msg.content);
-                if (initialArtifact && msg.role === 'assistant' && index === history.length - 1) {
-                    appendArtifactLink(el, initialArtifact);
+                if (msg.role === 'assistant' && index === history.length - 1) {
+                    appendArtifactLinks(el, initialArtifacts);
                 }
             });
             scrollToBottom();
@@ -132,7 +136,7 @@
             showTypingIndicator();
 
             try {
-                const resp = await fetch('{{ url_for("agent_message") }}', {
+                const resp = await fetch('{{ url_for("planned_message") }}', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: message }),
@@ -144,7 +148,7 @@
                 } else {
                     const data = await resp.json();
                     const el = appendMessage('assistant', data.reply || '(no response)');
-                    appendArtifactLink(el, data.artifact);
+                    appendArtifactLinks(el, data.artifacts);
                 }
             } catch (err) {
                 removeTypingIndicator();

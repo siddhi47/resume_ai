@@ -182,6 +182,7 @@ def generate_with_validation(
     max_attempts=2,
     fix_fn=None,
     trace=None,
+    initial_feedback="None.",
 ):
     """Runs attempt_fn(feedback) up to max_attempts times.
 
@@ -196,8 +197,11 @@ def generate_with_validation(
 
     Returns (final_text, remaining_issues); remaining_issues is empty only if some draft fully
     passed both checks (possibly after the surgical fix).
+
+    initial_feedback seeds the first attempt — used when a human has already asked for a
+    specific revision, so the first draft incorporates it rather than starting from scratch.
     """
-    feedback = "None."
+    feedback = initial_feedback or "None."
     last_text = ""
     last_issues = []
 
