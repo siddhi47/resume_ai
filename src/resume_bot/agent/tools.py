@@ -26,6 +26,7 @@ from src.resume_bot.agent.validation import (
     COVER_LETTER_JUDGE_RULES,
     RESUME_JUDGE_RULES,
     generate_with_validation,
+    surgical_fix,
     validate_cover_letter_text,
     validate_tailored_resume_structure,
 )
@@ -227,11 +228,15 @@ def generate_tailored_resume(
             return [f"LaTeX failed to compile: {detail}"]
         return []
 
+    def fix(text, issues):
+        return strip_code_fence(surgical_fix("tailored LaTeX resume", text, issues))
+
     tailored_tex, remaining_issues = generate_with_validation(
         attempt_fn=attempt,
         deterministic_check_fn=check,
         judge_rules=RESUME_JUDGE_RULES,
         document_type="tailored LaTeX resume",
+        fix_fn=fix,
     )
 
     company_sanitized = sanitize_filename_part(company)

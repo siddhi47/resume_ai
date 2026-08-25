@@ -7,7 +7,7 @@ from langchain.prompts import PromptTemplate
 from src.resume_bot.shared import BANNED_PHRASES
 
 PLACEHOLDER_PATTERN = re.compile(r"\[[A-Za-z][A-Za-z '.,]{2,40}\]")
-BANNED_OPENER = "i am writing to express my interest"
+BANNED_OPENER_PATTERN = re.compile(r"\b(writing|excited|eager|pleased|thrilled)\s+to\s+express\s+my\s+interest\b")
 
 SECTION_PATTERN = re.compile(r"\\section\{([^}]*)\}")
 ITEM_PATTERN = re.compile(r"\\item\b")
@@ -54,8 +54,8 @@ def validate_cover_letter_text(text):
     if placeholders:
         issues.append(f"contains bracketed placeholder text: {', '.join(placeholders[:3])}")
 
-    if BANNED_OPENER in lower[:250]:
-        issues.append('opens with the banned phrase "I am writing to express my interest"')
+    if BANNED_OPENER_PATTERN.search(lower[:250]):
+        issues.append('opens with a "___ to express my interest" cliché phrase')
 
     if "\u2014" in text:
         issues.append("uses an em dash")
@@ -89,6 +89,33 @@ def validate_tailored_resume_structure(original_tex, tailored_tex):
     return issues
 
 
+SURGICAL_FIX_PROMPT_TEMPLATE = """
+The following {document_type} has these specific problems: {issues}
+
+Make the smallest possible edit to fix exactly these problems — rephrase only the flagged
+words, phrases, or lines. Do not rewrite, reorder, or otherwise change anything else about the
+document. Return the complete corrected document and nothing else: no explanation, no
+commentary, no markdown code fences.
+
+Document:
+{document_text}
+"""
+
+
+def surgical_fix(document_type, document_text, issues):
+    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    prompt = PromptTemplate(
+        input_variables=["document_type", "issues", "document_text"],
+        template=SURGICAL_FIX_PROMPT_TEMPLATE,
+    )
+    chain = LLMChain(llm=llm, prompt=prompt)
+    return chain.run(
+        document_type=document_type,
+        issues="; ".join(issues),
+        document_text=document_text,
+    ).strip()
+
+
 def judge_document(document_type, rules, document_text):
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     prompt = PromptTemplate(
@@ -105,14 +132,26 @@ def judge_document(document_type, rules, document_text):
 
 
 def generate_with_validation(
-    attempt_fn, deterministic_check_fn, judge_rules, document_type, max_attempts=2
+    attempt_fn,
+    deterministic_check_fn,
+    judge_rules,
+    document_type,
+    max_attempts=2,
+    fix_fn=None,
 ):
     """Runs attempt_fn(feedback) up to max_attempts times.
 
     Each draft is checked with deterministic_check_fn(text) -> list[str] (cheap, no LLM cost).
     Only if that passes does it go through an LLM-judge pass. On any failure, the issues are
-    joined into feedback and fed into the next attempt. Returns (final_text, remaining_issues) —
-    remaining_issues is empty only if some attempt fully passed both checks.
+    joined into feedback and fed into the next full-regeneration attempt.
+
+    If issues remain after max_attempts, a full fresh regeneration can just as easily reintroduce
+    the same (or a different) cliché by chance, so as a last resort this makes one targeted
+    surgical-fix pass on the last draft — asking the model to fix only the flagged issues rather
+    than rewrite from scratch — before giving up.
+
+    Returns (final_text, remaining_issues); remaining_issues is empty only if some draft fully
+    passed both checks (possibly after the surgical fix).
     """
     feedback = "None."
     last_text = ""
@@ -130,5 +169,19 @@ def generate_with_validation(
 
         last_issues = issues
         feedback = "; ".join(issues)
+
+    if not last_issues:
+        return last_text, last_issues
+
+    fixer = fix_fn or (lambda text, issues: surgical_fix(document_type, text, issues))
+    fixed_text = fixer(last_text, last_issues)
+    fixed_issues = deterministic_check_fn(fixed_text)
+    if not fixed_issues:
+        passed, judge_feedback = judge_document(document_type, judge_rules, fixed_text)
+        if not passed:
+            fixed_issues = [judge_feedback]
+
+    if not fixed_issues or len(fixed_issues) < len(last_issues):
+        return fixed_text, fixed_issues
 
     return last_text, last_issues
