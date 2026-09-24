@@ -40,7 +40,7 @@ from src.resume_bot.agent.planned_graph import invoke_planned_sync, get_planned_
 import hashlib
 
 # LangChain & OpenAI
-from langchain.chat_models import ChatOpenAI
+from src.resume_bot.llm import ChatOpenAI
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter

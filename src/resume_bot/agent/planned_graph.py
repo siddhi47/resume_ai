@@ -40,7 +40,7 @@ from typing import Annotated, Optional, TypedDict
 
 import aiosqlite
 from langchain.chains import LLMChain
-from langchain.chat_models import ChatOpenAI
+from src.resume_bot.llm import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -112,7 +112,7 @@ def _llm(model="gpt-4o-mini", temperature=0):
 def _tool_calling_llm(model="gpt-4o", temperature=0.4):
     # The legacy community ChatOpenAI above has no bind_tools, so tool-using nodes need
     # the langchain_openai client (the same one graph.py's ReAct agent uses).
-    from langchain_openai import ChatOpenAI as ToolChatOpenAI
+    from src.resume_bot.llm import ChatOpenAI as ToolChatOpenAI
 
     return ToolChatOpenAI(model=model, temperature=temperature)
 

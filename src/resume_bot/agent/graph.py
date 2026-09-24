@@ -3,7 +3,7 @@ import os
 
 import aiosqlite
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
-from langchain_openai import ChatOpenAI
+from src.resume_bot.llm import ChatOpenAI
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
@@ -22,16 +22,16 @@ from src.resume_bot.agent.tools import LOCAL_TOOLS
 
 CHECKPOINT_DB_PATH = os.path.join("data", "agent_checkpoints.sqlite")
 
-_llm = None
-
-
 def _get_llm():
-    # Built lazily, not at import time: app.py imports this module before calling its own
-    # load_dotenv(), so OPENAI_API_KEY wouldn't be set yet if this ran at module load.
-    global _llm
-    if _llm is None:
-        _llm = ChatOpenAI(model="gpt-4o", temperature=0.4)
-    return _llm
+    # Built per call, and deliberately NOT cached in a module global.
+    #
+    # Lazily, because app.py imports this module before calling its own load_dotenv(),
+    # so credentials wouldn't be set yet at module load time. And per call, because the
+    # chat client owns an async HTTP client bound to the event loop that created it,
+    # while invoke_agent_sync() runs every request inside a fresh asyncio.run() loop
+    # that is closed on return. A cached instance therefore serves the first request in
+    # a worker and raises "RuntimeError: Event loop is closed" for every one after.
+    return ChatOpenAI(model="gpt-4o", temperature=0.4)
 
 
 def _ensure_data_dir():

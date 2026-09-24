@@ -4,7 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 from flask import session
 from langchain.chains import LLMChain
-from langchain.chat_models import ChatOpenAI
+from src.resume_bot.llm import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
