@@ -11,12 +11,13 @@ import re
 import subprocess
 
 from langchain.chains import LLMChain
-from langchain.chat_models import ChatOpenAI
+from src.resume_bot.llm import ChatOpenAI, needs_explicit_plan
 from langchain.prompts import PromptTemplate
 
 from src.resume_bot.shared import (
     COVER_LETTER_PROMPT_TEMPLATE,
     RESUME_TAILORING_PROMPT_TEMPLATE,
+    RESUME_EDIT_PLAN_PROMPT_TEMPLATE,
     generate_pdf,
     get_job_context,
     sanitize_filename_part,
@@ -136,6 +137,29 @@ def build_tailored_resume(
     with open(user_resume_tex_path, "r", encoding="utf-8", errors="replace") as f:
         tex_source = f.read()
 
+    # Pass 1 (local backends only): decide the edits before making them. Asked to
+    # "tailor" open-endedly, a small model returns the document unchanged; given an
+    # explicit list of replacements it applies them reliably. Frontier models do not
+    # need this and skip straight to the rewrite.
+    edit_plan = "A plan is not required for this backend."
+    if needs_explicit_plan():
+        plan_chain = LLMChain(
+            llm=ChatOpenAI(temperature=0.2),
+            prompt=PromptTemplate(
+                input_variables=["tex_source", "job_description", "relevant_projects"],
+                template=RESUME_EDIT_PLAN_PROMPT_TEMPLATE,
+            ),
+        )
+        try:
+            edit_plan = plan_chain.run(
+                tex_source=tex_source,
+                job_description=job_summary,
+                relevant_projects=relevant_projects or "None found.",
+            ).strip() or edit_plan
+        except Exception:
+            # A failed plan must not block the rewrite; fall back to unguided tailoring.
+            pass
+
     resume_llm = ChatOpenAI(temperature=0, model="gpt-4o")
     resume_prompt = PromptTemplate(
         input_variables=[
@@ -143,6 +167,7 @@ def build_tailored_resume(
             "job_description",
             "relevant_projects",
             "revision_feedback",
+            "edit_plan",
         ],
         template=RESUME_TAILORING_PROMPT_TEMPLATE,
     )
@@ -165,13 +190,19 @@ def build_tailored_resume(
             job_description=job_summary,
             relevant_projects=relevant_projects or "None found.",
             revision_feedback=feedback,
+            edit_plan=edit_plan,
         )
         candidate = strip_code_fence(raw)
         return reconcile_near_duplicate_hrefs(tex_source, candidate)
 
     def check(candidate_tex):
         issues = validate_tailored_resume_structure(
-            tex_source, candidate_tex, allowed_extra_hrefs=allowed_extra_hrefs
+            tex_source,
+            candidate_tex,
+            allowed_extra_hrefs=allowed_extra_hrefs,
+            # Local backends are held to reorder+emphasis only; they have been observed
+            # swapping a true claim for one lifted from the job ad.
+            strict_content=needs_explicit_plan(),
         )
         if issues:
             return issues

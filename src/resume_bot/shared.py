@@ -1,7 +1,7 @@
 import html as html_lib
 import re
 
-from langchain.chat_models import ChatOpenAI
+from src.resume_bot.llm import ChatOpenAI
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from fpdf import FPDF
@@ -181,6 +181,45 @@ Writing style:
 - Give a detailed, personalized response, but no filler sentences.
 """.replace("{banned_phrases}", _BANNED_PHRASES_LINE)
 
+RESUME_EDIT_PLAN_PROMPT_TEMPLATE = """
+You are planning how to tailor a candidate's LaTeX resume to a job. Do NOT write any LaTeX.
+
+Produce a numbered list of at most 12 concrete edits. Each line must quote the exact text to
+act on, in one of these two forms and nothing else:
+  N. REORDER: <section name> -> put "<exact existing item>" first
+  N. BOLD: "<exact existing phrase>"
+
+Rules:
+- You may ONLY reorder existing content and bold existing phrases. You may NOT reword, rewrite,
+  replace, extend, or combine any bullet. Tailoring here means surfacing the most relevant
+  true experience first and drawing the eye to it - never changing what it says.
+- This is a factual document. Rewriting "designed the data architecture for a recommendation
+  system" into "designed computer-vision models" because the job asks for computer vision is a
+  fabricated claim the candidate would have to defend in an interview. Do not do it, and do not
+  splice job-description phrasing onto the front of a real bullet either.
+- Prefer REORDER to put the bullets and skills that genuinely match the job first.
+- Quote existing text exactly as it appears so it can be located verbatim.
+- Leave a section alone if its order already suits the job. Six sharp edits beat twenty weak
+  ones.
+- Use BOLD for individual skills in the Technologies section that the job description
+  explicitly asks for - quote just the skill itself (e.g. "PyTorch", "Kubernetes"), never a
+  whole line, and never a category label that is already bold like "Languages:". Pick only
+  skills the job actually names; bolding everything highlights nothing. At most 6 BOLD
+  edits.
+- Do NOT try to bold section headings. They are already rendered bold by the document's
+  \\titleformat definition, and wrapping them would double up or break that formatting.
+- Output only the numbered list. No preamble, no commentary, no LaTeX.
+
+Job Description:
+{job_description}
+
+Verified GitHub Projects (may say "None found."):
+{relevant_projects}
+
+Resume (.tex):
+{tex_source}
+"""
+
 RESUME_TAILORING_PROMPT_TEMPLATE = """
 You are tailoring a candidate's LaTeX resume for a specific job.
 
@@ -197,6 +236,18 @@ Relevant GitHub Projects:
 - {relevant_projects}
 - If this lists specific real GitHub projects (with a name, description, and URL) that are NOT already in the Original Resume's Projects section, you may add ONE new entry per such project to the Projects section, copying the exact same LaTeX pattern already used there (a \\begin{{twocolentry}}...\\textbf{{Project Name}}\\end{{twocolentry}} followed by \\begin{{onecolentry}}\\begin{{highlights}}\\item description with a \\href{{URL}}{{link text}}\\end{{highlights}}\\end{{onecolentry}}). Use the exact name/description/URL given — never invent details about a project beyond what's given here.
 - If nothing here is new (already in the resume, or this says "None found."), you must NOT add any new Projects-section entry, even if the job description would make one look like a good fit — a project without a real URL given here has no verified source, full stop. In that case only reorder/reword EXISTING content.
+
+Planned edits:
+{edit_plan}
+- If the above is a numbered list of edits, apply EXACTLY those edits and change nothing
+  else. Do not invent further edits beyond them. If it says a plan is not required, decide
+  the rewording yourself using the rules above.
+- A "BOLD: <phrase>" entry means wrap that exact phrase in \\textbf{{...}} where it appears,
+  leaving the surrounding text untouched — e.g. PyTorch becomes \\textbf{{PyTorch}}. Never
+  nest it inside an existing \\textbf{{...}}, and never bold a section heading: headings are
+  already bold via the document's \\titleformat and wrapping them breaks it.
+- Applying no edits at all is a failure. Returning the original document unchanged is never
+  an acceptable answer.
 
 Revision feedback:
 - {revision_feedback}

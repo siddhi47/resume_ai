@@ -2,7 +2,7 @@ import difflib
 import re
 
 from langchain.chains import LLMChain
-from langchain.chat_models import ChatOpenAI
+from src.resume_bot.llm import ChatOpenAI
 from langchain.prompts import PromptTemplate
 
 from src.resume_bot.shared import BANNED_PHRASES
@@ -98,7 +98,9 @@ def validate_cover_letter_text(text):
     return issues
 
 
-def validate_tailored_resume_structure(original_tex, tailored_tex, allowed_extra_hrefs=None):
+def validate_tailored_resume_structure(
+    original_tex, tailored_tex, allowed_extra_hrefs=None, strict_content=False
+):
     """Checks structural preservation. allowed_extra_hrefs (a set of URLs) lets new links through
     when they correspond to real, verified GitHub projects the caller explicitly vouched for
     (e.g. extracted from the relevant_projects text) — anything else new is flagged as a likely
@@ -129,6 +131,86 @@ def validate_tailored_resume_structure(original_tex, tailored_tex, allowed_extra
             f"GitHub projects: {unexplained_hrefs}"
         )
 
+    issues.extend(_fabrication_issues(original_tex, tailored_tex, strict=strict_content))
+    issues.extend(_escape_damage_issues(original_tex, tailored_tex))
+
+    return issues
+
+
+# A bullet's text, to the end of its line, for comparing content before and after.
+_BULLET_PATTERN = re.compile(r"\\item\s+(.+)")
+# LaTeX escapes whose loss changes what the PDF says without breaking compilation.
+_ESCAPES = (r"\textasciitilde", r"\%", r"\&", r"\_", r"\#")
+
+
+def _normalise_bullet(text):
+    """Bullet text with bolding and spacing stripped, for content comparison.
+
+    Bolding is emphasis, not content, so \\textbf{PyTorch} must compare equal to PyTorch -
+    otherwise legitimate highlighting would look like a rewrite.
+    """
+    text = re.sub(r"\\textbf\{([^}]*)\}", r"\1", text)
+    return " ".join(text.split()).strip().rstrip(".")
+
+
+def _fabrication_issues(original_tex, tailored_tex, strict=False):
+    """Flag bullets whose claims do not trace back to the original resume.
+
+    The prompt forbids inventing experience, but instruction-following is not a guarantee: a
+    model optimising for similarity to the job ad will replace "designed the data architecture
+    for a recommendation system" with "designed computer-vision models" - a fabricated claim on
+    a factual document. The structural checks above cannot catch it, because the section list,
+    bullet count and links are all unchanged; only the truth of the text moved.
+
+    Two modes, because loose similarity scoring is not enough on its own. That real example
+    kept the whole second half of the bullet, so it still scored ~0.8 against the original and
+    sailed through - partial fabrication inside an otherwise intact sentence is invisible to a
+    whole-bullet ratio. So when the backend is not trusted to reword safely, strict mode
+    requires bullets to be untouched apart from bolding, and tailoring is limited to reordering
+    and emphasis. That cannot fabricate anything, because no new prose is generated at all.
+    """
+    threshold = 0.985 if strict else 0.70
+    originals = [_normalise_bullet(b) for b in _BULLET_PATTERN.findall(original_tex)]
+    if not originals:
+        return []
+
+    invented = []
+    for bullet in _BULLET_PATTERN.findall(tailored_tex):
+        candidate = _normalise_bullet(bullet)
+        if not candidate:
+            continue
+        best = max(difflib.SequenceMatcher(None, candidate, o).ratio() for o in originals)
+        if best < threshold:
+            invented.append(candidate[:110])
+
+    if invented:
+        detail = (
+            "must match the original exactly apart from \\textbf{...} emphasis"
+            if strict
+            else "does not correspond to anything in the original resume, so experience was "
+            "invented rather than reworded"
+        )
+        return [
+            f"bullet text {detail} - restore the original wording for: {invented[:3]}"
+        ]
+    return []
+
+
+def _escape_damage_issues(original_tex, tailored_tex):
+    """Flag lost LaTeX escapes, which change the rendered text while still compiling.
+
+    Rewriting \\textasciitilde10 as ~10 is the common one: in LaTeX ~ is a non-breaking space,
+    so "approximately 10" silently renders as "10". Nothing errors and the PDF looks fine
+    unless you already know what it used to say.
+    """
+    issues = []
+    for esc in _ESCAPES:
+        before, after = original_tex.count(esc), tailored_tex.count(esc)
+        if after < before:
+            issues.append(
+                f"dropped {before - after} occurrence(s) of the LaTeX escape '{esc}' - this "
+                "changes what the PDF renders; restore them exactly as in the original"
+            )
     return issues
 
 
