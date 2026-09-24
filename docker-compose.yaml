@@ -7,8 +7,6 @@ services:
       - FLASK_ENV=production  # Change this for production environment
     volumes:
       - .:/app
-    expose:
-      - "5050"  # Expose Flask app port to other containers in the same network, but not to the host
     ports:
       - "5050:5050"
     networks:

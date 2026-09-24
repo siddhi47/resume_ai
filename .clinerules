@@ -1,0 +1,55 @@
+# Project rules for resume_ai
+
+## Response style
+Be terse. Show the diff, not a narration of the diff. No summary section at the end
+unless the change spans more than three files.
+
+## Environment
+- Python >=3.12, dependencies managed with `uv` (`uv.lock` is authoritative; `poetry.lock`
+  is legacy — do not update it).
+- Run tests with `uv run pytest`. Run the app with `uv run gunicorn`.
+- Deployed to k3s as the `resume-ai` Deployment. Config comes from the `resume-ai-secrets`
+  Secret via `envFrom`, not from a mounted `.env`.
+
+## LLM backend — read this before touching any model code
+- Never `from langchain_openai import ChatOpenAI`. Always
+  `from src.resume_bot.llm import ChatOpenAI`. That module is a provider factory that
+  returns either the OpenAI client or `ChatOllama`, selected by `LLM_PROVIDER`. It keeps
+  the OpenAI-shaped call sites unchanged; bypassing it silently pins a file to OpenAI.
+- Production runs `LLM_PROVIDER=ollama` against a self-hosted model. OpenAI is the
+  fallback path only.
+- Do not cache a chat model in a module-level global. `asyncio.run()` opens and closes a
+  fresh event loop per call, and a cached `ChatOllama` holds an async client bound to the
+  loop that has already closed — the second request dies with
+  `RuntimeError: Event loop is closed`. Build the model inside the function.
+- `langchain*` is pinned to `<0.4.0`. `langchain-ollama` 1.x is incompatible with that
+  pin. Do not bump either without checking the other.
+
+## LangGraph state
+- Every key in `AgentState` that more than one tool can write MUST declare a reducer
+  (`Annotated[T, fn]`). Local models parallelise tool calls far more readily than GPT-4
+  did; two tools writing one key in a single step raises `InvalidUpdateError`, which
+  poisons the checkpoint permanently — the thread then 500s even on read.
+- Conversations are checkpointed in SQLite. Back the file up before any migration or
+  repair.
+
+## Resume tailoring — correctness rules
+The tailoring pipeline edits a real person's real resume. Fabrication is the primary
+failure mode, not a style issue.
+
+- On local backends the edit plan vocabulary is deliberately limited to `REORDER:` and
+  `BOLD:`. `REPLACE:` was removed on purpose — it made fabrication structurally
+  impossible rather than merely discouraged. Do not add it back.
+- Content validation runs at a 0.985 similarity threshold under `strict_content=True`.
+  A looser threshold (0.70 was tried) lets partial fabrication through: swapping a few
+  words of a bullet for phrasing lifted from the job ad still scores ~0.8.
+- LaTeX escapes are load-bearing. `\textasciitilde10` must not become `~10` — the latter
+  renders as a non-breaking space, silently dropping the word "approximately" from a
+  quantified claim. `\%`, `\&`, `\_`, `\#` likewise.
+- New `\href` URLs are only legitimate if they came in via `relevant_projects`.
+
+## Kubernetes
+- Probe timeouts must exceed the slowest realistic request. Generation can take minutes;
+  a 1s `timeoutSeconds` will kill the pod mid-request and look like a crash loop.
+- Never mount a hostPath over `/app` — it shadows the application code baked into the
+  image.
