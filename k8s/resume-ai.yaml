@@ -1,0 +1,161 @@
+# resume-ai on Kubernetes (k3s).
+#
+#   kubectl apply -f k8s/resume-ai.yaml
+#
+# Requires, first:
+#   1. the image built and present on the target node (see k8s/README.md) -
+#      imagePullPolicy is Never, so nothing is fetched from a registry;
+#   2. a Secret named resume-ai-secrets (see k8s/README.md for the key list).
+#
+# Values that are specific to one environment and will need editing elsewhere:
+#   - spec.template.spec.volumes[].hostPath.path   (host directory for persistence)
+#   - OLLAMA_BASE_URL                              (address of the Ollama server)
+#   - spec.ports[].nodePort                        (30505)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: resume-ai
+  name: resume-ai
+  namespace: default
+spec:
+  progressDeadlineSeconds: 600
+  # Single replica on purpose. The agent checkpoints conversations to a SQLite
+  # file on a hostPath volume; concurrent writers from a second pod would
+  # corrupt it.
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: resume-ai
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: resume-ai
+    spec:
+      containers:
+        # Overrides the image's CMD rather than requiring a rebuild to tune these.
+        #
+        # --timeout 1800: one tailoring run is a planning pass, then a rewrite that
+        # emits the whole LaTeX document, then up to one retry if validation rejects
+        # the result. Measured against qwen3:32b (163 tok/s prompt, 22 tok/s
+        # generation) that is ~490s, or ~560s when the model must be loaded first.
+        # The previous value of 480 cut requests off mid-generation.
+        #
+        # --threads 4: a long generation occupies one thread, so the probes below
+        # still get answered while a resume is being written.
+      - command: ["gunicorn"]
+        args: ["-b", "0.0.0.0:5050", "--timeout", "1800", "--workers", "2", "--threads", "4", "app:app"]
+        env:
+        - name: FLASK_APP
+          value: app.py
+        - name: FLASK_ENV
+          value: production
+        - name: GITHUB_MCP_MODE
+          value: hosted
+        # Chat backend. LLM_PROVIDER=ollama routes every call site through
+        # src/resume_bot/llm.py to the model below instead of the OpenAI API.
+        #
+        # OLLAMA_BASE_URL is a plain host address, not a cluster Service: this model
+        # runs on a machine outside the cluster. Change it for your environment.
+        - name: LLM_PROVIDER
+          value: ollama
+        - name: OLLAMA_MODEL
+          value: qwen3:32b
+        - name: OLLAMA_BASE_URL
+          value: http://10.0.0.35:11434
+        - name: OLLAMA_NUM_PREDICT
+          value: '8192'
+        envFrom:
+        - secretRef:
+            name: resume-ai-secrets
+        image: resume-ai:local
+        imagePullPolicy: Never
+        # timeoutSeconds must stay comfortably above a healthy response time. It was
+        # 1s, which killed the pod mid-request and presented as a crash loop rather
+        # than as a timeout.
+        livenessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /
+            port: 5050
+            scheme: HTTP
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 10
+        name: resume-ai
+        ports:
+        - containerPort: 5050
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /
+            port: 5050
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 10
+        resources:
+          limits:
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        # Only data is mounted. Application code lives in the image - never mount a
+        # volume over /app, it shadows the code that was built into it.
+        volumeMounts:
+        - mountPath: /app/data
+          name: resume-ai-data
+          subPath: data
+        - mountPath: /app/static/resumes
+          name: resume-ai-data
+          subPath: resumes
+      dnsPolicy: ClusterFirst
+      # REQUIRED on any multi-node cluster, and must be edited for yours.
+      #
+      # The volume below is a hostPath, which is a directory on one specific machine.
+      # Without this pin the scheduler may place the pod on a different node, where
+      # `type: DirectoryOrCreate` will happily create an empty directory - the app
+      # then starts with no conversations, no uploaded resumes, and no error, because
+      # from Kubernetes' point of view nothing went wrong.
+      nodeSelector:
+        kubernetes.io/hostname: i8labs-nuc11pahi7
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - hostPath:
+          path: /var/lib/resume-ai-data
+          type: DirectoryOrCreate
+        name: resume-ai-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: resume-ai
+  name: resume-ai
+  namespace: default
+spec:
+  externalTrafficPolicy: Cluster
+  ports:
+  - nodePort: 30505
+    port: 5050
+    protocol: TCP
+    targetPort: 5050
+  selector:
+    app: resume-ai
+  type: NodePort
