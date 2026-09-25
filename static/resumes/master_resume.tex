@@ -1,0 +1,597 @@
+%% =====================================================================
+%% MASTER RESUME -- Siddhi Kiran Bajracharya
+%% Superset of the edge, infra and PhD resume versions. NOT meant to be
+%% sent as-is. A model prunes it down for a specific job description.
+%%
+%% PRUNING RULES (for the LLM):
+%%  1. DELETE ONLY. Never add new text, reword claims, change numbers,
+%%     dates, titles, employers, tools, or DOIs.
+%%  2. Every bullet is preceded by a tag line:
+%%        % [id=<id> | alt=<group> | tags=<t1,t2>]
+%%     Delete the tag line together with its \item line.
+%%  3. Bullets sharing the same alt=<group> are alternative phrasings of
+%%     ONE achievement. Keep AT MOST ONE per group.
+%%  4. Summary: keep EXACTLY ONE %%SUMMARY block (or delete the whole
+%%     Summary section).
+%%  5. Never move a bullet to a different employer or section.
+%%  6. Keep every job entry (avoids timeline gaps); keep 2-5 bullets per
+%%     job, most relevant first is fine (reordering within a job is OK).
+%%  7. Sections marked OPTIONAL may be removed entirely: delete everything
+%%     from "%% BEGIN SECTION" to the matching "%% END SECTION".
+%%  8. Do not keep i8-yolo together with i8-annot-b (both cite the same
+%%     8% mAP gain).
+%%  9. Keep all \begin{...}/\end{...} pairs balanced. Output the complete,
+%%     compilable .tex file.
+%% 10. Target length: 1 page for industry roles, up to 2 for academic/PhD.
+%%
+%% TAGS: edge (edge/embedded inference, quantization, hardware)
+%%       cv (computer vision)  infra (k8s, cloud, containers)
+%%       backend (services, APIs, databases)  data (pipelines, ETL)
+%%       mlops (tracking, monitoring, reliability)  research (academic)
+%%       llm (LLM/RAG)  lead (leadership)  recsys (recommendation/optimization)
+%%       fintech (lending/finance)
+%% =====================================================================
+
+\documentclass[10pt, letterpaper]{article}
+
+% Packages:
+\usepackage[
+    ignoreheadfoot, % set margins without considering header and footer
+    top=1 cm, % seperation between body and page edge from the top
+    bottom=1 cm, % seperation between body and page edge from the bottom
+    left=2 cm, % seperation between body and page edge from the left
+    right=2 cm, % seperation between body and page edge from the right
+    footskip=0.6 cm, % seperation between body and footer
+    % showframe % for debugging 
+]{geometry} % for adjusting page geometry
+\usepackage{titlesec} % for customizing section titles
+\usepackage{tabularx} % for making tables with fixed width columns
+\usepackage{array} % tabularx requires this
+\usepackage[dvipsnames]{xcolor} % for coloring text
+\definecolor{primaryColor}{RGB}{0, 0, 0} % define primary color
+\usepackage{enumitem} % for customizing lists
+\usepackage{amsmath} % for math
+\usepackage[
+    pdftitle={Siddhi's CV},
+    pdfauthor={Siddhi},
+    colorlinks=true,
+    urlcolor=primaryColor
+]{hyperref} % for links, metadata and bookmarks
+\usepackage[pscoord]{eso-pic} % for floating text on the page
+\usepackage{calc} % for calculating lengths
+\usepackage{bookmark} % for bookmarks
+\usepackage{lastpage} % for getting the total number of pages
+\usepackage{changepage} % for one column entries (adjustwidth environment)
+\usepackage{paracol} % for two and three column entries
+\usepackage{ifthen} % for conditional statements
+\usepackage{needspace} % for avoiding page brake right after the section title
+\usepackage{iftex} % check if engine is pdflatex, xetex or luatex
+
+% Ensure that generate pdf is machine readable/ATS parsable:
+\ifPDFTeX
+    \input{glyphtounicode}
+    \pdfgentounicode=1
+    \usepackage[T1]{fontenc}
+    \usepackage[utf8]{inputenc}
+    \usepackage{lmodern}
+\fi
+
+\usepackage{charter}
+
+% Some settings:
+\raggedright
+\AtBeginEnvironment{adjustwidth}{\partopsep0pt} % remove space before adjustwidth environment
+\pagestyle{empty} % no header or footer
+\setcounter{secnumdepth}{0} % no section numbering
+\setlength{\parindent}{0pt} % no indentation
+\setlength{\topskip}{0pt} % no top skip
+\setlength{\columnsep}{0.15cm} % set column seperation
+\pagenumbering{gobble} % no page numbering
+
+\titleformat{\section}{\needspace{2\baselineskip}\bfseries\large}{}{0pt}{}[\vspace{1pt}\titlerule]
+
+\titlespacing{\section}{
+    % left space:
+    -1pt
+}{
+    % top space:
+    0.18 cm
+}{
+    % bottom space:
+    0.2 cm
+} % section title spacing
+
+\renewcommand\labelitemi{$\vcenter{\hbox{\small$\bullet$}}$} % custom bullet points
+\newenvironment{highlights}{
+    \begin{itemize}[
+        topsep=0.04 cm,
+        parsep=0.04 cm,
+        partopsep=0pt,
+        itemsep=0pt,
+        leftmargin=0 cm + 10pt
+    ]
+}{
+    \end{itemize}
+} % new environment for highlights
+
+
+\newenvironment{highlightsforbulletentries}{
+    \begin{itemize}[
+        topsep=0.10 cm,
+        parsep=0.10 cm,
+        partopsep=0pt,
+        itemsep=0pt,
+        leftmargin=10pt
+    ]
+}{
+    \end{itemize}
+} % new environment for highlights for bullet entries
+
+\newenvironment{onecolentry}{
+    \begin{adjustwidth}{
+        0 cm + 0.00001 cm
+    }{
+        0 cm + 0.00001 cm
+    }
+}{
+    \end{adjustwidth}
+} % new environment for one column entries
+
+\newenvironment{twocolentry}[2][]{
+    \onecolentry
+    \def\secondColumn{#2}
+    \setcolumnwidth{\fill, 4.5 cm}
+    \begin{paracol}{2}
+}{
+    \switchcolumn \raggedleft \secondColumn
+    \end{paracol}
+    \endonecolentry
+} % new environment for two column entries
+
+\newenvironment{threecolentry}[3][]{
+    \onecolentry
+    \def\thirdColumn{#3}
+    \setcolumnwidth{, \fill, 4.5 cm}
+    \begin{paracol}{3}
+    {\raggedright #2} \switchcolumn
+}{
+    \switchcolumn \raggedleft \thirdColumn
+    \end{paracol}
+    \endonecolentry
+} % new environment for three column entries
+
+\newenvironment{header}{
+    \setlength{\topsep}{0pt}\par\kern\topsep\centering\linespread{1.5}
+}{
+    \par\kern\topsep
+} % new environment for the header
+
+\newcommand{\placelastupdatedtext}{% \placetextbox{<horizontal pos>}{<vertical pos>}{<stuff>}
+  \AddToShipoutPictureFG*{% Add <stuff> to current page foreground
+    \put(
+        \LenToUnit{\paperwidth-2 cm-0 cm+0.05cm},
+        \LenToUnit{\paperheight-1.0 cm}
+    ){\vtop{{\null}\makebox[0pt][c]{
+        \small\color{gray}\textit{Last updated in August 2026}\hspace{\widthof{Last updated in August 2026}}
+    }}}%
+  }%
+}%
+
+% save the original href command in a new command:
+\let\hrefWithoutArrow\href
+
+% new command for external links:
+
+
+\begin{document}
+    \newcommand{\AND}{\unskip
+        \cleaders\copy\ANDbox\hskip\wd\ANDbox
+        \ignorespaces
+    }
+    \newsavebox\ANDbox
+    \sbox\ANDbox{$|$}
+
+    \begin{header}
+        \fontsize{25 pt}{25 pt}\selectfont Siddhi Kiran Bajracharya
+
+        \vspace{5 pt}
+
+        \normalsize
+        \mbox{Mountain View, CA}%
+        \kern 5.0 pt%
+        \AND%
+        \kern 5.0 pt%
+        \mbox{\hrefWithoutArrow{mailto:siddhikiran.bajracharya@gmail.com}{siddhikiran.bajracharya@gmail.com}}%
+        \kern 5.0 pt%
+        \AND%
+        \kern 5.0 pt%
+        \mbox{\hrefWithoutArrow{tel:+1-605-728-6309}{605-728-6309}}%
+        \kern 5.0 pt%
+        \AND%
+        \kern 5.0 pt%
+        \mbox{\hrefWithoutArrow{https://siddhibajracharya.com.np/}{siddhibajracharya.com.np}}%
+        \kern 5.0 pt%
+        \AND%
+        \kern 5.0 pt%
+        \mbox{\hrefWithoutArrow{https://linkedin.com/in/siddhikiran}{linkedin.com/in/siddhikiran}}%
+        \kern 5.0 pt%
+        \AND%
+        \kern 5.0 pt%
+        \mbox{\hrefWithoutArrow{https://github.com/siddhi47}{github.com/siddhi47}}%
+    \end{header}
+
+    \vspace{5 pt - 0.3 cm}
+
+
+    %% BEGIN SECTION Summary (OPTIONAL -- keep exactly one SUMMARY block)
+    \section{Summary}
+
+    %% SUMMARY variant=edge  [tags=edge,cv]
+        \begin{onecolentry}
+            Senior Machine Learning Engineer with 6+ years of experience designing, optimizing, and deploying end-to-end ML systems across cloud and edge environments. Proven track record in model compression, explicit PyTorch Q/DQ quantization, INT8 calibration, and cross-platform edge execution (TensorRT, OpenVINO, TFLite). Experienced in profiling compute, memory, and power trade-offs to achieve low latency and real-time performance across edge hardware and NPUs.
+        \end{onecolentry}
+    %% END SUMMARY
+
+    %% SUMMARY variant=infra  [tags=infra,backend,data,mlops]
+        \begin{onecolentry}
+            Senior ML engineer with 6+ years building and operating production systems in Python and Go, from real-time data ingestion and microservices on Kubernetes to ML pipelines driving automated decisions. Helped launch Foneloan, a consumer lending product now offered by 11+ banks. Experienced in database design (partitioning, indexing), reliability (99\% uptime across edge fleets), and optimizing for latency and cost under real deployment constraints.
+        \end{onecolentry}
+    %% END SUMMARY
+
+    %% SUMMARY variant=research  [tags=research,edge]
+        \begin{onecolentry}
+            Machine Learning Engineer with an MS in Computer Science (GPA 4.0/4.0) from the University of South Dakota and industry experience since 2018 in computer vision, edge inference on IoT devices, and production ML pipelines. Authored 2 conference papers and co-authored 1 Springer book, with research in multimodal (audio + text) learning and single-lead ECG signal analysis. Seeking to pursue a PhD in AI for edge and IoT systems.
+        \end{onecolentry}
+    %% END SUMMARY
+%% END SECTION Summary
+
+%% BEGIN SECTION Education (REQUIRED)
+    \section{Education}
+
+        \begin{twocolentry}{
+            Aug 2022 – Dec 2023
+        }
+            \textbf{University of South Dakota}, MS in Computer Science -- Vermillion, SD\end{twocolentry}
+
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                % [id=edu-gpa | tags=all]
+                \item GPA: 4.0/4.0
+                % [id=edu-course-a | alt=edu-course | tags=cv,research,edge]
+                \item \textbf{Coursework:} Computer Vision, Machine Learning and Pattern Recognition
+                % [id=edu-course-b | alt=edu-course | tags=backend,infra]
+                \item \textbf{Coursework:} Computer Vision, Machine Learning and Pattern Recognition, Advanced Algorithms
+            \end{highlights}
+        \end{onecolentry}
+%% END SECTION Education
+
+%% BEGIN SECTION Research and Teaching (OPTIONAL -- best for research/PhD/academic roles)
+    \section{Research and Teaching Experience}
+
+        \begin{twocolentry}{
+            Aug 2022 – Dec 2023
+        }
+            \textbf{Graduate Research Assistant}, University of South Dakota -- Vermillion, SD\end{twocolentry}
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                % [id=gra-pubs | tags=research]
+                \item Authored 2 conference papers and co-authored 1 Springer book, \textit{Cracking the Machine Learning Code: Technicality or Innovation?} (2024).
+                % [id=gra-topics | tags=research]
+                \item Worked on multimodal (audio + text) learning and signal data (single-lead ECG).
+            \end{highlights}
+        \end{onecolentry}
+
+        \vspace{0.12 cm}
+        \begin{twocolentry}{
+            Aug 2022 – Dec 2023
+        }
+            \textbf{Graduate Teaching Assistant}, University of South Dakota -- Vermillion, SD\end{twocolentry}
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                % [id=gta-course | tags=research]
+                \item Taught an online computer science course.
+                % [id=gta-materials | tags=research]
+                \item Prepared lecture slides and course materials, graded assignments, and provided feedback to students.
+            \end{highlights}
+        \end{onecolentry}
+%% END SECTION Research and Teaching
+
+%% BEGIN SECTION Experience (REQUIRED -- keep every job entry)
+    \section{Experience}
+
+        %% JOB onramp
+        \begin{twocolentry}{
+            Sep 2025 – Aug 2026
+        }
+            \textbf{Senior Machine Learning Engineer}, \href{https://onrampfleet.com/}{ONRAMP} -- New York\end{twocolentry}
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                % [id=onramp-arch-a | alt=onramp-arch | tags=backend,recsys,data]
+                \item Designed the data architecture for a production recommendation system and built the Go and Python microservices serving recommendation and analytics workloads at scale.
+                % [id=onramp-arch-b | alt=onramp-arch | tags=backend,recsys,data,infra]
+                \item Designed the data architecture for a production recommendation system, partitioning and indexing high-volume tables for query performance, and built the Go and Python microservices serving recommendation and analytics workloads at scale.
+                % [id=onramp-argo-a | alt=onramp-argo | tags=infra,data,mlops]
+                \item Migrated and consolidated \textasciitilde10 legacy cloud functions into a generalized, parameterized Argo Workflows framework (self-hosted), eliminating VPC connector overhead and turning one-off featurization and data-preparation jobs into reusable, maintainable pipelines for downstream ML tasks.
+                % [id=onramp-argo-b | alt=onramp-argo | tags=infra,data,research]
+                \item Consolidated \textasciitilde10 legacy cloud functions into a generalized, parameterized Argo Workflows framework, turning one-off featurization and data-preparation jobs into reusable pipelines for downstream ML tasks.
+                % [id=onramp-k8s | tags=infra,mlops]
+                \item Containerized and deployed services with Docker, Kubernetes, and Helm on GCP, optimizing for scalability, compute utilization, and cost efficiency across the end-to-end pipeline.
+                % [id=onramp-sim | tags=recsys,research,data]
+                \item Built simulation workflows for rapid, pre-production experimentation: evaluated proposed recommendation and optimization algorithms against historic transaction data, projecting \textasciitilde15\% fuel cost savings for carriers.
+                % [id=onramp-lead | tags=lead,recsys]
+                \item Provided technical leadership in the design and specification of optimization and recommendation algorithms, driving tradeoff analysis across quality, speed, and cost.
+            \end{highlights}
+        \end{onecolentry}
+
+        \vspace{0.12 cm}
+        %% JOB i8labs
+        \begin{twocolentry}{
+            Feb 2024 – Sep 2025
+        }
+            \textbf{Senior Machine Learning Engineer}, \href{https://i8labs.com/}{i8labs} -- Mountain View, CA\end{twocolentry}
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                % [id=i8-openvino | tags=edge,cv]
+                \item Exported and optimized custom YOLOv8 models to the OpenVINO runtime for Luxonis OAK (DepthAI) edge hardware, balancing compute and power trade-offs to sustain a stable 24 FPS real-time frame budget with object tracking.
+                % [id=i8-profiling | tags=edge]
+                \item Conducted layer-level inference profiling using DepthAI execution tracing to isolate compute and memory bandwidth bottlenecks across heterogeneous edge targets.
+                % [id=i8-yolo | tags=cv,mlops]  (do not combine with i8-annot-b)
+                \item Trained, fine-tuned, and productionized custom YOLO computer vision models (PyTorch/Ultralytics, AWS) for real-world sensor streams, achieving an 8\% increase in mean Average Precision (mAP) with metric-driven evaluation across model iterations.
+                % [id=i8-annot-a | alt=i8-annot | tags=data,cv,mlops]
+                \item Built and standardized an internal semi-automated data annotation and curation pipeline to surface high-value training data, improving model accuracy and cutting manual labeling effort by 80\%.
+                % [id=i8-annot-b | alt=i8-annot | tags=data,cv,edge,research]  (do not combine with i8-yolo)
+                \item Built and standardized an internal semi-automated data annotation pipeline, cutting manual labeling effort by 80\% while achieving an 8\% increase in mean Average Precision (mAP).
+                % [id=i8-docker | tags=infra,edge]
+                \item Reduced Docker image size by 60\%, cutting inference footprint, storage cost, and deployment time across a fleet of heterogeneous edge/IoT devices.
+                % [id=i8-uptime-a | alt=i8-uptime | tags=mlops,infra]
+                \item Maintained 99\% uptime for deployed inference services using Grafana for monitoring/observability and Balena for fleet device management, prioritizing reliability and operational simplicity.
+                % [id=i8-uptime-b | alt=i8-uptime | tags=mlops,edge]
+                \item Maintained 99\% uptime for edge inference fleets using Grafana for observability and Balena for remote fleet management.
+            \end{highlights}
+        \end{onecolentry}
+
+        \vspace{0.12 cm}
+        %% JOB leapfrog
+        \begin{twocolentry}{
+            Aug 2021 – Aug 2022
+        }
+            \textbf{Machine Learning Engineer}, \href{https://www.lftechnology.com/}{Leapfrog Technology} -- Nepal\end{twocolentry}
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                % [id=lf-lead | tags=lead,edge,cv]
+                \item Led a team of two ML engineers building an end-to-end object detection and tracking system for embedded IoT devices, optimizing inference throughput with TensorRT on NVIDIA Jetson Nano.
+                % [id=lf-quant | tags=edge]
+                \item Applied PyTorch explicit Q/DQ quantization and INT8 calibration via trtexec, alongside structured pruning and model distillation, reducing inference footprint and memory latency.
+                % [id=lf-telemetry | tags=edge,mlops]
+                \item Monitored hardware power draw, memory bandwidth, and compute usage using tegrastats and jtop, logging telemetry to monitoring systems to evaluate thermal and execution trade-offs.
+                % [id=lf-tflite | tags=edge]
+                \item Prepared lightweight neural network architectures for low-power edge environments, including TFLite model deployment on Android mobile devices.
+                % [id=lf-ingest | tags=backend,data,edge]
+                \item Built secure, high-throughput data ingestion pipelines using Python and FastAPI for real-time integration with IoT sensor devices.
+                % [id=lf-mlflow-a | alt=lf-mlflow | tags=mlops]
+                \item Implemented MLFlow for end-to-end ML lifecycle management, including experiment tracking, model evaluation, versioning, and regression safeguards across releases.
+                % [id=lf-mlflow-b | alt=lf-mlflow | tags=mlops,edge,research]
+                \item Implemented MLFlow for experiment tracking, model evaluation, and regression safeguards across production releases.
+                % [id=lf-standards | tags=lead,mlops,infra]
+                \item Defined and implemented ML engineering standards (unit testing, containerization, CI/CD), improving sprint velocity by 20\%.
+            \end{highlights}
+        \end{onecolentry}
+
+        \vspace{0.12 cm}
+        %% JOB extensodata
+        \begin{twocolentry}{
+            Sept 2018 – July 2021
+        }
+            \textbf{Data Scientist}, \href{https://www.extensodata.com/}{extensoData} -- Nepal\end{twocolentry}
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                % [id=ex-foneloan-a | alt=ex-foneloan | tags=data,fintech,backend]
+                \item Part of the small team that built and launched \href{https://foneloan.com.np/}{Foneloan}, Nepal's first collateral-free instant digital lending product, now offered by 11+ major commercial banks; built the data pipelines (Apache Airflow, Pentaho) automating loan-disbursement decisions with ML and statistical models, eliminating the human decision loop.
+                % [id=ex-foneloan-b | alt=ex-foneloan | tags=data,fintech,research]
+                \item Part of the small team that built and launched \href{https://foneloan.com.np/}{Foneloan}, Nepal's first collateral-free instant digital lending product, now offered by 11+ commercial banks; built data pipelines (Apache Airflow, Pentaho) automating loan decisions with ML and statistical models.
+                % [id=ex-foneloan-c | alt=ex-foneloan | tags=data,edge]
+                \item Engineered automated loan-disbursement ML pipelines (Apache Airflow) for \href{https://foneloan.com.np/}{Foneloan}, Nepal's first collateral-free digital lending product adopted by 11+ commercial banks.
+                % [id=ex-ocr | tags=cv,data]
+                \item Built an AWS-based OCR pipeline (Tesseract + Python) to automate text extraction from national identification cards, improving data entry speed by 90\%.
+            \end{highlights}
+        \end{onecolentry}
+%% END SECTION Experience
+
+%% BEGIN SECTION Publications (REQUIRED for research roles; OPTIONAL otherwise)
+    \section{Publications}
+
+        \begin{samepage}
+            \begin{twocolentry}{
+                2025
+            }
+                \textbf{A Hybrid Transformer Model for Robust Multi-modal Emotion Recognition Using Audio and Text Data} -- \href{https://link.springer.com/chapter/10.1007/978-981-96-9533-1_22}{10.1007/978-981-96-9533-1\_22}
+            \end{twocolentry}
+        \end{samepage}
+
+        \vspace{0.06 cm}
+        \begin{samepage}
+            \begin{twocolentry}{
+                2024
+            }
+                \textbf{Cracking the Machine Learning Code: Technicality or Innovation?} (Springer book, co-author) -- \href{https://doi.org/10.1007/978-981-97-2720-9}{10.1007/978-981-97-2720-9}
+            \end{twocolentry}
+        \end{samepage}
+
+        \vspace{0.06 cm}
+        \begin{samepage}
+            \begin{twocolentry}{
+                2023
+            }
+                \textbf{Deep Spectral Features to Detect Atrial Fibrillation using Single-Lead ECG Signals} (IEEE CAI) -- \href{https://ieeexplore.ieee.org/document/10195073}{10.1109/CAI54212.2023.00074}
+            \end{twocolentry}
+        \end{samepage}
+%% END SECTION Publications
+
+%% BEGIN SECTION Projects (OPTIONAL -- each PROJECT block may be deleted whole)
+    \section{Projects}
+
+        %% PROJECT rag  [tags=llm,infra,backend]
+        \begin{twocolentry}{
+        }
+            \textbf{RAG Document Q\&A System (Embedding-Based Retrieval)}\end{twocolentry}
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                \item Retrieval-augmented generation system with embedding-based vector search (ChromaDB) over multi-format documents (PDF, JSON, CSV, web). Tools: LangChain, LangGraph, LangSmith, Flask, Docker, Kubernetes. \href{https://github.com/siddhi47/RAG-chatbot}{github.com/siddhi47/RAG-chatbot}
+            \end{highlights}
+        \end{onecolentry}
+        %% END PROJECT
+
+        \vspace{0.1 cm}
+        %% PROJECT homelab  [tags=infra,llm]
+        \begin{twocolentry}{
+        }
+            \textbf{Self-Hosted AI Platform (Kubernetes)}\end{twocolentry}
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                \item Two-node k8s cluster (CPU + GPU) spanning an Ubuntu Server CPU node and a Windows/WSL2 GPU node, serving local LLMs, image generation, a RAG chatbot, and self-hosted search; portable manifests via label-based node selection, scripted secrets and config backup/restore. \href{https://github.com/siddhi47/homelab-k8s}{github.com/siddhi47/homelab-k8s}
+            \end{highlights}
+        \end{onecolentry}
+        %% END PROJECT
+
+        \vspace{0.1 cm}
+        %% PROJECT pyspark  [tags=data,recsys,backend]
+        \begin{twocolentry}{
+        }
+            \textbf{Large-Scale Recommendation Pipeline (PySpark)}\end{twocolentry}
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                \item Distributed recommendation system over large-scale user-rating data, from ingestion and featurization through model serving. Tools: HDFS, PySpark, AWS, MongoDB, Docker, Flask. \href{https://github.com/siddhi47/pyspark-recommentation}{github.com/siddhi47/pyspark-recommentation}
+            \end{highlights}
+        \end{onecolentry}
+        %% END PROJECT
+
+        \vspace{0.1 cm}
+        %% PROJECT multimodal  [tags=research,llm,cv]
+        \begin{twocolentry}{
+        }
+            \textbf{Multimodal Emotion Analysis}\end{twocolentry}
+        \vspace{0.06 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                \item Multimodal network (LLMs + visual models) to identify emotion from speech and video streams. Tools: PyTorch Lightning, Python. \href{https://github.com/siddhi47/multimodal-emotion}{github.com/siddhi47/multimodal-emotion}
+            \end{highlights}
+        \end{onecolentry}
+        %% END PROJECT
+%% END SECTION Projects
+
+%% BEGIN SECTION Certifications (OPTIONAL)
+    \section{Certifications}
+
+        \begin{samepage}
+            \begin{twocolentry}{
+                Aug 2024
+            }
+                \textbf{MLOps | Machine Learning Operations by Duke University (Coursera)}
+            \end{twocolentry}
+            \vspace{0.06 cm}
+            \begin{onecolentry}
+                \href{https://coursera.org/verify/specialization/C2229E7K8YCJ}{C2229E7K8YCJ}
+            \end{onecolentry}
+        \end{samepage}
+
+        \vspace{0.05 cm}
+        \begin{samepage}
+            \begin{twocolentry}{
+                Aug 2024
+            }
+                \textbf{Container Orchestration using Kubernetes (Coursera)}
+            \end{twocolentry}
+            \vspace{0.06 cm}
+            \begin{onecolentry}
+                \href{https://coursera.org/share/1df59f5037a370f3e6107779451aeca2}{1df59f5037a370f3e6107779451aeca2}
+            \end{onecolentry}
+        \end{samepage}
+%% END SECTION Certifications
+
+%% BEGIN SECTION Technologies (REQUIRED -- delete whole lines or individual
+%% comma-separated items; never add tools that are not listed here)
+    \section{Technologies}
+
+        % [id=sk-lang | tags=all]
+        \begin{onecolentry}
+            \textbf{Languages:} Python, Go, C, C++, SQL, Bash.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-ml | tags=cv,research,edge,llm]
+        \begin{onecolentry}
+            \textbf{ML / CV / Multimodal:} PyTorch, PyTorch Lightning, TensorFlow, scikit-learn, Ultralytics (YOLO), OpenCV, depthai.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-quant | tags=edge]
+        \begin{onecolentry}
+            \textbf{Quantization \& Optimization:} PyTorch Q/DQ, INT8 Calibration, Model Pruning, Model Distillation, TensorRT (trtexec), OpenVINO, TFLite.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-profiling | tags=edge,mlops]
+        \begin{onecolentry}
+            \textbf{Profiling \& Observability:} tegrastats, jtop, DepthAI Tracing, Grafana, Sentry.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-llm | tags=llm]
+        \begin{onecolentry}
+            \textbf{LLM \& Retrieval:} LangChain, LangGraph, LangSmith, ChromaDB.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-data | tags=data,infra,recsys]
+        \begin{onecolentry}
+            \textbf{Data Processing \& Pipelines:} Apache Airflow, Argo Workflows, PySpark, HDFS, Pentaho, Pandas, NumPy.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-cloud | tags=infra]
+        \begin{onecolentry}
+            \textbf{Cloud \& Infra:} AWS (EC2, S3, EKS), GCP (GKE, Vertex AI), Kubernetes, Helm, Docker, Balena.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-mlops | tags=mlops]
+        \begin{onecolentry}
+            \textbf{MLOps \& Observability:} MLFlow, ClearML, Grafana, Sentry.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-serving | tags=backend]
+        \begin{onecolentry}
+            \textbf{Serving \& APIs:} FastAPI, Flask, Django REST.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-db | tags=backend,data]
+        \begin{onecolentry}
+            \textbf{Database:} MySQL, MongoDB, SQLite, Postgres.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-hw | tags=edge]
+        \begin{onecolentry}
+            \textbf{Sensors \& Edge Hardware:} Luxonis OAK Camera, NVIDIA Jetson, Sony Camera Sensors, Android SoCs, ESP32, Raspberry Pi.
+        \end{onecolentry}
+        \vspace{0.05 cm}
+
+        % [id=sk-vcs | tags=all]
+        \begin{onecolentry}
+            \textbf{Version Control:} Git, Bitbucket.
+        \end{onecolentry}
+%% END SECTION Technologies
+
+\end{document}
